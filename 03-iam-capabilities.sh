@@ -22,7 +22,7 @@ probe() {
         else
             echo "[ERROR] $(echo "$OUTPUT" | head -1 | cut -c1-80)"
         fi
-        return 1
+        return 0  # Don't fail the script — denial is expected diagnostic data
     fi
 }
 
