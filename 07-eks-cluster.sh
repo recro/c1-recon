@@ -4,7 +4,7 @@ set -euo pipefail
 
 section() { echo ""; echo "--- $1 ---"; echo ""; }
 
-_IMDS_TOKEN=$(curl -sf -X PUT "http://169.254.169.254/latest/api/token" \
+_IMDS_TOKEN=$(curl -sfm 2 -X PUT "http://169.254.169.254/latest/api/token" \
     -H "X-aws-ec2-metadata-token-ttl-seconds: 60" 2>/dev/null) || true
 if [[ -n "$_IMDS_TOKEN" ]]; then
     REGION=$(curl -sf -H "X-aws-ec2-metadata-token: $_IMDS_TOKEN" \

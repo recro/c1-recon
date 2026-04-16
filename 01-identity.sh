@@ -8,7 +8,7 @@ section() { echo ""; echo "--- $1 ---"; echo ""; }
 # ---------- IMDS Token (IMDSv2) ----------
 section "Instance Metadata (IMDSv2)"
 
-TOKEN=$(curl -sf -X PUT "http://169.254.169.254/latest/api/token" \
+TOKEN=$(curl -sfm 2 -X PUT "http://169.254.169.254/latest/api/token" \
     -H "X-aws-ec2-metadata-token-ttl-seconds: ${IMDS_TOKEN_TTL}" 2>/dev/null) || true
 
 if [[ -z "${TOKEN:-}" ]]; then

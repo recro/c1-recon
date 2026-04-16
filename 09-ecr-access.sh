@@ -4,7 +4,7 @@ set -euo pipefail
 
 section() { echo ""; echo "--- $1 ---"; echo ""; }
 
-_IMDS_TOKEN=$(curl -sf -X PUT "http://169.254.169.254/latest/api/token" \
+_IMDS_TOKEN=$(curl -sfm 2 -X PUT "http://169.254.169.254/latest/api/token" \
     -H "X-aws-ec2-metadata-token-ttl-seconds: 60" 2>/dev/null) || true
 if [[ -n "$_IMDS_TOKEN" ]]; then
     REGION=$(curl -sf -H "X-aws-ec2-metadata-token: $_IMDS_TOKEN" \
@@ -78,18 +78,61 @@ if [[ -n "$REPOS" ]] && echo "$REPOS" | jq -e '.repositories | length > 0' &>/de
     echo "$REPOS" | jq -r '.repositories[] | "  \(.repositoryName)\t\(.imageTagMutability)\t\(.imageScanningConfiguration.scanOnPush)"' | \
         sort | column -t -s$'\t'
 
-    # Highlight SpectroCloud-related repos
+    # ---------- ImageSwap-Aware Repo Classification ----------
+    # Palette's ImageSwap webhook dynamically creates ECR repos by embedding the full
+    # original image path. Repos are NOT static names — they encode the source registry.
+    section "ECR Repository Classification (ImageSwap-aware)"
+    echo "Palette VerteX mirrors images into ECR preserving the full upstream path:"
+    echo "  gcr.io/spectro-images-public/foo → <base>/spectro-images/gcr.io/spectro-images-public/foo"
+    echo "  us-docker.pkg.dev/palette/bar   → <base>/spectro-images/us-docker.pkg.dev/palette/bar"
     echo ""
-    echo "SpectroCloud-related repositories:"
-    echo "$REPOS" | jq -r '.repositories[] | select(.repositoryName | test("spectro|vertex|palette"; "i")) | "  \(.repositoryName)"' || \
-        echo "  [none found]"
 
+    SI_REPOS=$(echo "$REPOS" | jq '[.repositories[] | select(.repositoryName | test("spectro-images"))]')
+    SP_REPOS=$(echo "$REPOS" | jq '[.repositories[] | select(.repositoryName | test("spectro-packs"))]')
+    OTHER=$(echo "$REPOS" | jq '[.repositories[] | select(.repositoryName | test("spectro-images|spectro-packs") | not)]')
+
+    SI_COUNT=$(echo "$SI_REPOS" | jq 'length')
+    SP_COUNT=$(echo "$SP_REPOS" | jq 'length')
+    OTHER_COUNT=$(echo "$OTHER" | jq 'length')
+
+    echo "  spectro-images/* (container images, ImageSwap targets): ${SI_COUNT}"
+    echo "  spectro-packs/*  (OCI pack artifacts):                  ${SP_COUNT}"
+    echo "  other:                                                  ${OTHER_COUNT}"
+
+    # Break down image repos by embedded source registry
+    if (( SI_COUNT > 0 )); then
+        echo ""
+        echo "  Image repos by source registry (embedded in ECR path):"
+        for SRC in "us-docker.pkg.dev" "gcr.io" "registry.k8s.io" "docker.io" "quay.io" "ghcr.io"; do
+            SRC_N=$(echo "$SI_REPOS" | jq --arg s "$SRC" '[.[] | select(.repositoryName | contains($s))] | length')
+            printf "    %-30s %d repos\n" "$SRC" "$SRC_N"
+        done
+    fi
+
+    # HNCD-specific
     echo ""
-    echo "HNCD-related repositories:"
-    echo "$REPOS" | jq -r '.repositories[] | select(.repositoryName | test("hncd"; "i")) | "  \(.repositoryName)"' || \
-        echo "  [none found]"
+    echo "  HNCD-specific repositories:"
+    echo "$REPOS" | jq -r '.repositories[] | select(.repositoryName | test("hncd"; "i")) | "    \(.repositoryName)"' 2>/dev/null || \
+        echo "    [none found]"
 
-    # Image count for first few repos
+    # Pack repos
+    if (( SP_COUNT > 0 )); then
+        echo ""
+        echo "  Pack repositories:"
+        echo "$SP_REPOS" | jq -r '.[].repositoryName' 2>/dev/null | sed 's/^/    /'
+    fi
+
+    # Sample of image repos
+    if (( SI_COUNT > 0 )); then
+        echo ""
+        echo "  Sample image repos (first 15 of ${SI_COUNT}):"
+        echo "$SI_REPOS" | jq -r '.[0:15][].repositoryName' 2>/dev/null | sed 's/^/    /'
+        if (( SI_COUNT > 15 )); then
+            echo "    ... and $((SI_COUNT - 15)) more"
+        fi
+    fi
+
+    # Image counts (sample)
     section "Image Counts (sample)"
     SAMPLE_REPOS=$(echo "$REPOS" | jq -r '.repositories[0:5][].repositoryName')
     for REPO in $SAMPLE_REPOS; do

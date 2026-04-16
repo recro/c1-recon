@@ -29,9 +29,10 @@ Diagnostic scripts designed to run from a deployed EC2 instance inside the HNCD 
 | `06-endpoint-reachability.sh` | HTTPS/TLS connectivity to AWS services, GitLab punch-through, OIDC |
 | `07-eks-cluster.sh` | EKS cluster details, OIDC provider config, node groups, addons |
 | `08-vpc-environment.sh` | VPC topology, subnets, route tables, security groups, VPC endpoint inventory |
-| `09-ecr-access.sh` | ECR authentication test, repository listing, VPC endpoint dependency check |
+| `09-ecr-access.sh` | ECR auth, ImageSwap-aware repo classification, source registry breakdown |
 | `10-spectro-readiness.sh` | SpectroCloud Palette/VerteX deployment readiness (IAM limits, subnet tags, Pod Identity, tooling) |
 | `11-export-twin.sh` | **Export structured JSON snapshot for digital twin provisioning** |
+| `12-imageswap-validation.sh` | ImageSwap mutating webhook health, swap map config, ECR mutation chain, pod verification |
 
 ## Usage
 
