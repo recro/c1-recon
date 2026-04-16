@@ -33,6 +33,7 @@ SCRIPTS=(
     "08-vpc-environment.sh"
     "09-ecr-access.sh"
     "10-spectro-readiness.sh"
+    # 11-export-twin.sh runs separately — outputs JSON, not part of text report
 )
 
 PASS=0
@@ -66,3 +67,6 @@ echo "  Errors: ${FAIL}" | tee -a "$REPORT"
 echo "  Skipped: ${SKIP}" | tee -a "$REPORT"
 echo "" | tee -a "$REPORT"
 echo "Full report: $(pwd)/${REPORT}" | tee -a "$REPORT"
+echo "" | tee -a "$REPORT"
+echo "To export structured JSON for digital twin provisioning:" | tee -a "$REPORT"
+echo "  ./11-export-twin.sh > twin-snapshot-${TIMESTAMP}.json" | tee -a "$REPORT"
