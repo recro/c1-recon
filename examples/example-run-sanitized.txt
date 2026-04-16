@@ -1,0 +1,975 @@
+================================================================================
+  C1-RECON — Example Run Output (Sanitized)
+================================================================================
+
+  This is a sanitized example of c1-recon output collected from a commercial
+  AWS account. It demonstrates the exact output format you will see when
+  running against a C1 GovCloud account.
+
+  Sanitization applied:
+    - AWS account IDs replaced with 123456789012
+    - SSO role names replaced with ExampleRole_abc123
+    - IAM role IDs replaced with AROAEXAMPLEROLEID12345
+    - All other resource IDs (VPCs, subnets, SGs, etc.) left as-is
+
+  In a real C1 GovCloud run:
+    - Region will be us-gov-west-1 or us-gov-east-1
+    - ARN partition will be aws-us-gov instead of aws
+    - OIDC endpoints will use the GovCloud EKS domain
+    - Script 01 will populate from EC2 IMDS (instance metadata)
+
+================================================================================
+
+
+################################################################################
+##  01-identity.sh — Instance Identity (IMDS + Caller)
+################################################################################
+
+--- EC2 Instance Metadata (IMDSv2) ---
+
+Instance ID:       i-0a1b2c3d4e5f67890
+Region:            us-gov-west-1
+Availability Zone: us-gov-west-1a
+Account ID:        123456789012
+Instance Type:     m5.large
+AMI ID:            ami-0fedcba9876543210
+VPC ID:            vpc-0abc123def456789a
+Subnet ID:         subnet-0abc123def456789a
+Private IP:        10.0.3.47
+MAC Address:       0a:1b:2c:3d:4e:5f
+Security Groups:   sg-0abc123def456789a
+
+IAM Instance Profile:
+  ARN: arn:aws-us-gov:iam::123456789012:instance-profile/recon-runner-profile
+  Role: recon-runner-role
+
+--- STS Caller Identity ---
+
+Caller ARN: arn:aws-us-gov:sts::123456789012:assumed-role/recon-runner-role/i-0a1b2c3d4e5f67890
+Account:    123456789012
+UserId:     AROAEXAMPLEROLEID12345:i-0a1b2c3d4e5f67890
+
+[NOTE] Running as EC2 instance role — permissions determined by instance profile.
+
+
+################################################################################
+##  02-iam-context.sh — IAM Role Details & Policy Simulation
+################################################################################
+
+Caller ARN: arn:aws:sts::123456789012:assumed-role/ExampleRole_abc123/jdoe
+Account:    123456789012
+
+--- IAM Role Details: ExampleRole_abc123 ---
+
+Fetching role metadata...
+{
+  "RoleName": "ExampleRole_abc123",
+  "RoleId": "AROAEXAMPLEROLEID12345",
+  "Arn": "arn:aws:iam::123456789012:role/aws-reserved/sso.amazonaws.com/ExampleRole_abc123",
+  "CreateDate": "2025-04-01T21:10:39+00:00",
+  "MaxSessionDuration": 43200,
+  "Path": "/aws-reserved/sso.amazonaws.com/"
+}
+
+--- Permissions Boundary ---
+
+No permissions boundary attached to this role
+
+--- Trust Policy (AssumeRolePolicyDocument) ---
+
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::123456789012:saml-provider/AWSSSO_cd0107c4d024706a_DO_NOT_DELETE"
+      },
+      "Action": [
+        "sts:AssumeRoleWithSAML",
+        "sts:TagSession"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "SAML:aud": "https://signin.aws.amazon.com/saml"
+        }
+      }
+    }
+  ]
+}
+
+--- Attached Managed Policies ---
+
+
+--- Inline Policies ---
+
+"AwsSSOInlinePolicy"
+
+  Policy: AwsSSOInlinePolicy
+{
+  "Statement": [
+    {
+      "Action": "*",
+      "Effect": "Allow",
+      "Resource": "*"
+    }
+  ],
+  "Version": "2012-10-17"
+}
+
+--- Instance Profiles for Role ---
+
+
+--- Policy Simulation (iam:SimulatePrincipalPolicy) ---
+
+Attempting to simulate key actions against caller's effective policies...
+(This call itself requires iam:SimulatePrincipalPolicy permission)
+
+{
+  "Action": "iam:CreateOpenIDConnectProvider",
+  "Decision": "allowed",
+  "MatchedStatements": 1
+}
+{
+  "Action": "iam:GetOpenIDConnectProvider",
+  "Decision": "allowed",
+  "MatchedStatements": 1
+}
+{
+  "Action": "iam:ListOpenIDConnectProviders",
+  "Decision": "allowed",
+  "MatchedStatements": 1
+}
+{
+  "Action": "sts:AssumeRole",
+  "Decision": "allowed",
+  "MatchedStatements": 1
+}
+{
+  "Action": "sts:AssumeRoleWithWebIdentity",
+  "Decision": "allowed",
+  "MatchedStatements": 1
+}
+{
+  "Action": "eks:DescribeCluster",
+  "Decision": "allowed",
+  "MatchedStatements": 1
+}
+{
+  "Action": "eks:ListClusters",
+  "Decision": "allowed",
+  "MatchedStatements": 1
+}
+{
+  "Action": "ec2:DescribeVpcs",
+  "Decision": "allowed",
+  "MatchedStatements": 1
+}
+{
+  "Action": "ec2:DescribeSubnets",
+  "Decision": "allowed",
+  "MatchedStatements": 1
+}
+{
+  "Action": "ecr:GetAuthorizationToken",
+  "Decision": "allowed",
+  "MatchedStatements": 1
+}
+{
+  "Action": "s3:ListBucket",
+  "Decision": "allowed",
+  "MatchedStatements": 1
+}
+
+
+################################################################################
+##  03-capabilities.sh — IAM Capabilities Probe
+################################################################################
+
+--- IAM Capabilities Probe ---
+
+Testing read-only API calls to determine effective permissions.
+DENIED results may indicate permissions boundary restrictions.
+
+
+--- STS ---
+
+  sts:GetCallerIdentity                                   [ALLOWED]
+  sts:GetSessionToken                                     [DENIED]
+  sts:GetAccessKeyInfo                                    [ALLOWED] (param error — call was accepted)
+
+--- IAM — Identity & Access ---
+
+  iam:ListRoles                                           [ALLOWED]
+  iam:ListUsers                                           [ALLOWED]
+  iam:ListPolicies                                        [ALLOWED]
+  iam:ListPolicies (AWS)                                  [ALLOWED]
+  iam:ListOpenIDConnectProviders                          [ALLOWED]
+  iam:ListSAMLProviders                                   [ALLOWED]
+  iam:GetAccountSummary                                   [ALLOWED]
+  iam:GetAccountAuthorizationDetails                      [ALLOWED]
+  iam:ListInstanceProfiles                                [ALLOWED]
+  iam:ListServiceSpecificCredentials                      [ERROR]
+
+--- EKS ---
+
+  eks:ListClusters                                        [ALLOWED]
+  eks:ListAddons (if cluster)                             [ALLOWED] (resource not found)
+  eks:ListFargateProfiles                                 [ALLOWED] (resource not found)
+  eks:ListNodegroups                                      [ALLOWED] (resource not found)
+  eks:DescribeAddonVersions                               [ALLOWED]
+
+--- EKS Cluster: gitlab-eks ---
+
+  eks:DescribeCluster (gitlab-eks)                        [ALLOWED]
+  eks:ListNodegroups (gitlab-eks)                         [ALLOWED]
+  eks:ListAddons (gitlab-eks)                             [ALLOWED]
+  OIDC Issuer: https://oidc.eks.us-east-1.amazonaws.com/id/954DB58D50B73591AE124A2A166211CD
+
+--- EKS Cluster: recro-eks ---
+
+  eks:DescribeCluster (recro-eks)                         [ALLOWED]
+  eks:ListNodegroups (recro-eks)                          [ALLOWED]
+  eks:ListAddons (recro-eks)                              [ALLOWED]
+  OIDC Issuer: https://oidc.eks.us-east-1.amazonaws.com/id/861E69A486B9851CA2FDCCE0DEF0B3C7
+
+--- EC2 ---
+
+  ec2:DescribeInstances                                   [ALLOWED]
+  ec2:DescribeVpcs                                        [ALLOWED]
+  ec2:DescribeSubnets                                     [ALLOWED]
+  ec2:DescribeSecurityGroups                              [ALLOWED]
+  ec2:DescribeRouteTables                                 [ALLOWED]
+  ec2:DescribeNatGateways                                 [ALLOWED]
+  ec2:DescribeVpcEndpoints                                [ALLOWED]
+  ec2:DescribeNetworkInterfaces                           [ALLOWED]
+  ec2:DescribeImages (self)                               [ALLOWED]
+  ec2:DescribeKeyPairs                                    [ALLOWED]
+  ec2:DescribeAvailabilityZones                           [ALLOWED]
+  ec2:DescribeRegions                                     [ALLOWED]
+
+--- ECR ---
+
+  ecr:GetAuthorizationToken                               [ALLOWED]
+  ecr:DescribeRepositories                                [ALLOWED]
+  ecr:GetRegistryPolicy                                   [ALLOWED] (resource not found)
+  ecr:DescribeRegistry                                    [ALLOWED]
+
+--- S3 ---
+
+  s3:ListBuckets                                          [ALLOWED]
+  s3:GetBucketLocation                                    [DENIED]
+
+--- CloudFormation ---
+
+  cloudformation:ListStacks                               [ALLOWED]
+  cloudformation:DescribeStacks                           [ALLOWED]
+
+--- Organizations ---
+
+  organizations:DescribeOrganization                      [ALLOWED]
+  organizations:ListAccounts                              [ALLOWED]
+
+--- Security Hub ---
+
+  securityhub:GetFindings                                 [ERROR]
+  securityhub:GetEnabledStandards                         [ERROR]
+
+--- CloudWatch / Logs ---
+
+  logs:DescribeLogGroups                                  [ALLOWED]
+  cloudwatch:ListMetrics                                  [ALLOWED]
+
+--- Systems Manager ---
+
+  ssm:DescribeInstanceInformation                         [ALLOWED]
+  ssm:GetParametersByPath (/)                             [ALLOWED]
+
+Probe complete. DENIED results indicate permissions boundary or policy restrictions.
+
+
+################################################################################
+##  07-eks.sh — EKS Cluster Details, OIDC, Node Groups, Addons
+################################################################################
+
+Region:  us-east-1
+Account: 123456789012
+
+--- EKS Clusters ---
+
+Clusters found: gitlab-eks	recro-eks
+
+--- Cluster: gitlab-eks ---
+
+{
+  "Name": "gitlab-eks",
+  "Arn": "arn:aws:eks:us-east-1:123456789012:cluster/gitlab-eks",
+  "Version": "1.35",
+  "PlatformVersion": "eks.9",
+  "Status": "ACTIVE",
+  "Endpoint": "https://954DB58D50B73591AE124A2A166211CD.gr7.us-east-1.eks.amazonaws.com",
+  "EndpointPublicAccess": true,
+  "EndpointPrivateAccess": true,
+  "PublicAccessCidrs": [
+    "0.0.0.0/0"
+  ],
+  "VpcId": "vpc-05e0464925db101ef",
+  "SubnetIds": [
+    "subnet-09c1a054868675742",
+    "subnet-0848095a72302ae2f",
+    "subnet-0681b9d1fd2ddc378"
+  ],
+  "SecurityGroupIds": [
+    "sg-0f2adaaebae853428"
+  ],
+  "ClusterSecurityGroupId": "sg-0be36a9ba947875a0",
+  "ServiceIpv4Cidr": "172.20.0.0/16",
+  "IpFamily": "ipv4",
+  "RoleArn": "arn:aws:iam::123456789012:role/gitlab-eks-cluster-role",
+  "CreatedAt": "2026-04-01T13:15:27.666000-04:00"
+}
+
+--- OIDC Identity Provider (gitlab-eks) ---
+
+OIDC Issuer URL: https://oidc.eks.us-east-1.amazonaws.com/id/954DB58D50B73591AE124A2A166211CD
+OIDC Provider ID: id
+
+Checking IAM OIDC providers...
+{
+  "OpenIDConnectProviderList": [
+    {
+      "Arn": "arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/861E69A486B9851CA2FDCCE0DEF0B3C7"
+    },
+    {
+      "Arn": "arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/954DB58D50B73591AE124A2A166211CD"
+    },
+    {
+      "Arn": "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
+    }
+  ]
+}
+
+Expected OIDC Provider ARN: arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/954DB58D50B73591AE124A2A166211CD
+[OK] OIDC provider IS registered in IAM: arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/954DB58D50B73591AE124A2A166211CD
+
+{
+  "Url": "oidc.eks.us-east-1.amazonaws.com/id/954DB58D50B73591AE124A2A166211CD",
+  "ClientIDList": [
+    "sts.amazonaws.com"
+  ],
+  "ThumbprintList": [
+    "06b25927c42a721631c1efd9431e648fa62e1e39"
+  ],
+  "CreateDate": "2026-04-01T20:20:48.130000+00:00"
+}
+
+OIDC Discovery Endpoint:
+  URL: https://oidc.eks.us-east-1.amazonaws.com/id/954DB58D50B73591AE124A2A166211CD/.well-known/openid-configuration
+  [OK] Discovery document retrieved:
+{
+  "issuer": "https://oidc.eks.us-east-1.amazonaws.com/id/954DB58D50B73591AE124A2A166211CD",
+  "jwks_uri": "https://oidc.eks.us-east-1.amazonaws.com/id/954DB58D50B73591AE124A2A166211CD/keys",
+  "authorization_endpoint": "urn:kubernetes:programmatic_authorization",
+  "response_types_supported": [
+    "id_token"
+  ],
+  "subject_types_supported": [
+    "public"
+  ],
+  "claims_supported": [
+    "sub",
+    "iss"
+  ],
+  "id_token_signing_alg_values_supported": [
+    "RS256"
+  ]
+}
+
+--- Managed Node Groups (gitlab-eks) ---
+
+[INFO] No managed node groups (or access denied)
+
+--- Fargate Profiles (gitlab-eks) ---
+
+
+--- Installed Addons (gitlab-eks) ---
+
+{
+  "AddonName": "aws-ebs-csi-driver",
+  "AddonVersion": "v1.57.1-eksbuild.1",
+  "Status": "DEGRADED",
+  "ServiceAccountRoleArn": "arn:aws:iam::123456789012:role/gitlab-ebs-csi-role"
+}
+{
+  "AddonName": "coredns",
+  "AddonVersion": "v1.13.2-eksbuild.3",
+  "Status": "DEGRADED",
+  "ServiceAccountRoleArn": null
+}
+{
+  "AddonName": "kube-proxy",
+  "AddonVersion": "v1.35.0-eksbuild.2",
+  "Status": "ACTIVE",
+  "ServiceAccountRoleArn": null
+}
+{
+  "AddonName": "snapshot-controller",
+  "AddonVersion": "v8.5.0-eksbuild.3",
+  "Status": "DEGRADED",
+  "ServiceAccountRoleArn": null
+}
+{
+  "AddonName": "vpc-cni",
+  "AddonVersion": "v1.21.1-eksbuild.1",
+  "Status": "ACTIVE",
+  "ServiceAccountRoleArn": null
+}
+
+--- EKS Pod Identity Associations (gitlab-eks) ---
+
+
+--- EKS Access Entries (gitlab-eks) ---
+
+"arn:aws:iam::123456789012:role/aws-reserved/sso.amazonaws.com/ExampleRole_abc123"
+"arn:aws:iam::123456789012:role/aws-service-role/eks.amazonaws.com/AWSServiceRoleForAmazonEKS"
+"arn:aws:iam::123456789012:role/github-actions-rke2-pryon-infra"
+"arn:aws:iam::123456789012:role/gitlab-bastion-role"
+"arn:aws:iam::123456789012:role/gitlab-eks-node-role"
+
+--- Cluster: recro-eks ---
+
+{
+  "Name": "recro-eks",
+  "Arn": "arn:aws:eks:us-east-1:123456789012:cluster/recro-eks",
+  "Version": "1.31",
+  "PlatformVersion": "eks.55",
+  "Status": "ACTIVE",
+  "Endpoint": "https://861E69A486B9851CA2FDCCE0DEF0B3C7.gr7.us-east-1.eks.amazonaws.com",
+  "EndpointPublicAccess": true,
+  "EndpointPrivateAccess": true,
+  "PublicAccessCidrs": [
+    "0.0.0.0/0"
+  ],
+  "VpcId": "vpc-0da7442f207006e95",
+  "SubnetIds": [
+    "subnet-0d0b1b8d92a136978",
+    "subnet-0a3cfcee561c41421",
+    "subnet-08a3ae608512826c9",
+    "subnet-0a7167c9f59a96d97",
+    "subnet-09adaba26a9954494",
+    "subnet-0ddddfcbde427f222"
+  ],
+  "SecurityGroupIds": [
+    "sg-000b41cc8a1784562"
+  ],
+  "ClusterSecurityGroupId": "sg-066f7891dfd82223c",
+  "ServiceIpv4Cidr": "172.20.0.0/16",
+  "IpFamily": "ipv4",
+  "RoleArn": "arn:aws:iam::123456789012:role/recro-eks-cluster-role",
+  "CreatedAt": "2026-01-13T19:57:47.394000-05:00"
+}
+
+--- OIDC Identity Provider (recro-eks) ---
+
+OIDC Issuer URL: https://oidc.eks.us-east-1.amazonaws.com/id/861E69A486B9851CA2FDCCE0DEF0B3C7
+OIDC Provider ID: id
+
+Checking IAM OIDC providers...
+{
+  "OpenIDConnectProviderList": [
+    {
+      "Arn": "arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/861E69A486B9851CA2FDCCE0DEF0B3C7"
+    },
+    {
+      "Arn": "arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/954DB58D50B73591AE124A2A166211CD"
+    },
+    {
+      "Arn": "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
+    }
+  ]
+}
+
+Expected OIDC Provider ARN: arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/861E69A486B9851CA2FDCCE0DEF0B3C7
+[OK] OIDC provider IS registered in IAM: arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/861E69A486B9851CA2FDCCE0DEF0B3C7
+
+{
+  "Url": "oidc.eks.us-east-1.amazonaws.com/id/861E69A486B9851CA2FDCCE0DEF0B3C7",
+  "ClientIDList": [
+    "sts.amazonaws.com"
+  ],
+  "ThumbprintList": [
+    "06b25927c42a721631c1efd9431e648fa62e1e39"
+  ],
+  "CreateDate": "2026-01-14T02:13:02.578000+00:00"
+}
+
+OIDC Discovery Endpoint:
+  URL: https://oidc.eks.us-east-1.amazonaws.com/id/861E69A486B9851CA2FDCCE0DEF0B3C7/.well-known/openid-configuration
+  [OK] Discovery document retrieved:
+{
+  "issuer": "https://oidc.eks.us-east-1.amazonaws.com/id/861E69A486B9851CA2FDCCE0DEF0B3C7",
+  "jwks_uri": "https://oidc.eks.us-east-1.amazonaws.com/id/861E69A486B9851CA2FDCCE0DEF0B3C7/keys",
+  "authorization_endpoint": "urn:kubernetes:programmatic_authorization",
+  "response_types_supported": [
+    "id_token"
+  ],
+  "subject_types_supported": [
+    "public"
+  ],
+  "claims_supported": [
+    "sub",
+    "iss"
+  ],
+  "id_token_signing_alg_values_supported": [
+    "RS256"
+  ]
+}
+
+--- Managed Node Groups (recro-eks) ---
+
+  Node Group: general
+    {
+      "NodegroupName": "general",
+      "Status": "ACTIVE",
+      "InstanceTypes": [
+        "t3.medium",
+        "t3.large"
+      ],
+      "AmiType": "AL2023_x86_64_STANDARD",
+      "ReleaseVersion": "1.31.13-20260129",
+      "DesiredSize": 2,
+      "MinSize": 1,
+      "MaxSize": 5,
+      "NodeRole": "arn:aws:iam::123456789012:role/recro-eks-node-role",
+      "LaunchTemplate": null,
+      "Subnets": [
+        "subnet-0d0b1b8d92a136978",
+        "subnet-0a7167c9f59a96d97",
+        "subnet-09adaba26a9954494"
+      ]
+    }
+
+  Node Group: general-v3
+    {
+      "NodegroupName": "general-v3",
+      "Status": "ACTIVE",
+      "InstanceTypes": [
+        "t3.medium",
+        "t3.large"
+      ],
+      "AmiType": "CUSTOM",
+      "ReleaseVersion": "ami-0fd46a4f26b4bb8e7",
+      "DesiredSize": 2,
+      "MinSize": 1,
+      "MaxSize": 5,
+      "NodeRole": "arn:aws:iam::123456789012:role/recro-eks-node-role",
+      "LaunchTemplate": {
+        "name": "recro-eks-prefix-delegation",
+        "version": "2",
+        "id": "lt-0869db9f40a765256"
+      },
+      "Subnets": [
+        "subnet-0d0b1b8d92a136978",
+        "subnet-0a7167c9f59a96d97",
+        "subnet-09adaba26a9954494"
+      ]
+    }
+
+  Node Group: gpu
+    {
+      "NodegroupName": "gpu",
+      "Status": "ACTIVE",
+      "InstanceTypes": [
+        "g4dn.xlarge",
+        "g4dn.2xlarge"
+      ],
+      "AmiType": "AL2023_x86_64_NVIDIA",
+      "ReleaseVersion": "1.31.13-20260107",
+      "DesiredSize": 0,
+      "MinSize": 0,
+      "MaxSize": 4,
+      "NodeRole": "arn:aws:iam::123456789012:role/recro-eks-node-role",
+      "LaunchTemplate": null,
+      "Subnets": [
+        "subnet-0d0b1b8d92a136978",
+        "subnet-0a7167c9f59a96d97",
+        "subnet-09adaba26a9954494"
+      ]
+    }
+
+
+--- Fargate Profiles (recro-eks) ---
+
+
+--- Installed Addons (recro-eks) ---
+
+{
+  "AddonName": "aws-ebs-csi-driver",
+  "AddonVersion": "v1.54.0-eksbuild.1",
+  "Status": "ACTIVE",
+  "ServiceAccountRoleArn": "arn:aws:iam::123456789012:role/recro-eks-ebs-csi-driver"
+}
+{
+  "AddonName": "cert-manager",
+  "AddonVersion": "v1.19.2-eksbuild.1",
+  "Status": "ACTIVE",
+  "ServiceAccountRoleArn": null
+}
+{
+  "AddonName": "coredns",
+  "AddonVersion": "v1.11.3-eksbuild.1",
+  "Status": "ACTIVE",
+  "ServiceAccountRoleArn": null
+}
+{
+  "AddonName": "external-dns",
+  "AddonVersion": "v0.20.0-eksbuild.2",
+  "Status": "ACTIVE",
+  "ServiceAccountRoleArn": "arn:aws:iam::123456789012:role/recro-eks-external-dns"
+}
+{
+  "AddonName": "kube-proxy",
+  "AddonVersion": "v1.31.10-eksbuild.12",
+  "Status": "ACTIVE",
+  "ServiceAccountRoleArn": null
+}
+{
+  "AddonName": "metrics-server",
+  "AddonVersion": "v0.8.0-eksbuild.6",
+  "Status": "ACTIVE",
+  "ServiceAccountRoleArn": null
+}
+{
+  "AddonName": "vpc-cni",
+  "AddonVersion": "v1.20.4-eksbuild.2",
+  "Status": "ACTIVE",
+  "ServiceAccountRoleArn": null
+}
+
+--- EKS Pod Identity Associations (recro-eks) ---
+
+
+--- EKS Access Entries (recro-eks) ---
+
+"arn:aws:iam::123456789012:role/aws-reserved/sso.amazonaws.com/ExampleRole_abc123"
+"arn:aws:iam::123456789012:role/aws-reserved/sso.amazonaws.com/ExampleRole_abc123"
+"arn:aws:iam::123456789012:role/aws-reserved/sso.amazonaws.com/ExampleRole_abc123"
+"arn:aws:iam::123456789012:role/aws-service-role/eks.amazonaws.com/AWSServiceRoleForAmazonEKS"
+"arn:aws:iam::123456789012:role/ocp-stig-jumpbox-role"
+"arn:aws:iam::123456789012:role/recro-eks-gitlab-runner"
+"arn:aws:iam::123456789012:role/recro-eks-node-role"
+"arn:aws:iam::123456789012:user/github-recro-iac"
+
+--- All IAM OIDC Providers in Account ---
+
+{
+  "OpenIDConnectProviderList": [
+    {
+      "Arn": "arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/861E69A486B9851CA2FDCCE0DEF0B3C7"
+    },
+    {
+      "Arn": "arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/954DB58D50B73591AE124A2A166211CD"
+    },
+    {
+      "Arn": "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
+    }
+  ]
+}
+
+
+################################################################################
+##  08-networking.sh — VPCs, Subnets, Routes, Security Groups, Endpoints
+################################################################################
+
+Region: us-east-1
+Instance VPC:    [unknown]
+Instance Subnet: [unknown]
+Instance SGs:    [unknown]
+
+--- VPCs ---
+
+{
+  "VpcId": "vpc-0d86cd4a322b47fa1",
+  "CidrBlock": "10.103.0.0/16",
+  "State": "available",
+  "IsDefault": false,
+  "OwnerId": "123456789012",
+  "Tags": "airgap-test-vpc"
+}
+{
+  "VpcId": "vpc-0d9e825604ac1a920",
+  "CidrBlock": "10.0.0.0/16",
+  "State": "available",
+  "IsDefault": false,
+  "OwnerId": "123456789012",
+  "Tags": "openshift-test-vpc"
+}
+{
+  "VpcId": "vpc-06ba1878a9eceddd9",
+  "CidrBlock": "10.0.0.0/16",
+  "State": "available",
+  "IsDefault": false,
+  "OwnerId": "123456789012",
+  "Tags": "openshift-test-vpc"
+}
+{
+  "VpcId": "vpc-06ed7a01c3b1cd9fd",
+  "CidrBlock": "10.99.0.0/16",
+  "State": "available",
+  "IsDefault": false,
+  "OwnerId": "123456789012",
+  "Tags": "ocp-stig-jumpbox-vpc"
+}
+{
+  "VpcId": "vpc-0da7442f207006e95",
+  "CidrBlock": "10.0.0.0/16",
+  "State": "available",
+  "IsDefault": false,
+  "OwnerId": "123456789012",
+  "Tags": "recro-eks-vpc"
+}
+{
+  "VpcId": "vpc-05e0464925db101ef",
+  "CidrBlock": "10.150.0.0/16",
+  "State": "available",
+  "IsDefault": false,
+  "OwnerId": "123456789012",
+  "Tags": "gitlab-vpc"
+}
+{
+  "VpcId": "vpc-01408b4fb9001afc6",
+  "CidrBlock": "10.101.0.0/16",
+  "State": "available",
+  "IsDefault": false,
+  "OwnerId": "123456789012",
+  "Tags": "dev-ncis-twin-vpc"
+}
+{
+  "VpcId": "vpc-047211f1cde03d99e",
+  "CidrBlock": "10.100.0.0/16",
+  "State": "available",
+  "IsDefault": false,
+  "OwnerId": "123456789012",
+  "Tags": "ncis-twin-vpc"
+}
+{
+  "VpcId": "vpc-0ef6eb8b1e1aa6129",
+  "CidrBlock": "172.31.0.0/16",
+  "State": "available",
+  "IsDefault": true,
+  "OwnerId": "123456789012",
+  "Tags": "untagged"
+}
+{
+  "VpcId": "vpc-0ae3a40eb23562dfa",
+  "CidrBlock": "10.100.0.0/16",
+  "State": "available",
+  "IsDefault": false,
+  "OwnerId": "123456789012",
+  "Tags": "ncis-twin-vpc"
+}
+
+--- Subnets ---
+
+All subnets:
+{
+  "SubnetId": "subnet-02b057b2b250a1d3a",
+  "VpcId": "vpc-0ef6eb8b1e1aa6129",
+  "AvailabilityZone": "us-east-1b",
+  "CidrBlock": "172.31.0.0/20",
+  "MapPublicIpOnLaunch": true
+}
+{
+  "SubnetId": "subnet-0366a3548f7f36e58",
+  "VpcId": "vpc-047211f1cde03d99e",
+  "AvailabilityZone": "us-east-1b",
+  "CidrBlock": "10.100.11.0/24",
+  "MapPublicIpOnLaunch": false
+}
+{
+  "SubnetId": "subnet-02dc9a1b7d5ceb72a",
+  "VpcId": "vpc-0ae3a40eb23562dfa",
+  "AvailabilityZone": "us-east-1b",
+  "CidrBlock": "10.100.11.0/24",
+  "MapPublicIpOnLaunch": false
+}
+
+[... truncated for brevity — 40+ subnets across 10 VPCs ...]
+
+--- Route Tables ---
+
+{
+  "RouteTableId": "rtb-001b198d5e2ce4e1d",
+  "VpcId": "vpc-0d9e825604ac1a920",
+  "Routes": [
+    {
+      "Destination": "10.0.0.0/16",
+      "Target": "local"
+    },
+    {
+      "Destination": "0.0.0.0/0",
+      "Target": "igw-0f8569f9df3bf3f98"
+    }
+  ]
+}
+
+[... truncated for brevity — route tables for all 10 VPCs ...]
+
+--- Security Groups (this instance) ---
+
+Instance SGs unknown — showing all SGs in account:
+{
+  "GroupId": "sg-0681fc6f831953ec5",
+  "GroupName": "ncis-twin-adfs-20260318022826711900000015",
+  "VpcId": "vpc-0ae3a40eb23562dfa",
+  "Description": "ADFS Server - federation service and management access"
+}
+{
+  "GroupId": "sg-07cffa1dbb889a55c",
+  "GroupName": "launch-wizard-16",
+  "VpcId": "vpc-0ef6eb8b1e1aa6129",
+  "Description": "launch-wizard-16 created 2025-10-06T15:52:32.986Z"
+}
+
+[... truncated for brevity — 50+ security groups across all VPCs ...]
+
+--- VPC Endpoints (airgapped — sole path to AWS services) ---
+
+In this airgapped environment, VPC endpoints are the ONLY path to AWS services.
+Missing endpoints = broken functionality. Every AWS API call requires a corresponding
+interface endpoint (PrivateLink) or gateway endpoint (S3/DynamoDB).
+
+Found 6 VPC endpoints:
+
+  vpce-08845785435bcdc16  Interface  com.amazonaws.us-east-1.ec2messages  available  PrivateDNS=true
+  vpce-09fa015369459aa48  Gateway    com.amazonaws.us-east-1.s3           available  PrivateDNS=false
+  vpce-0d08785c9e4d554c6  Gateway    com.amazonaws.us-east-1.s3           available  PrivateDNS=false
+  vpce-0d28736b73c9c8edf  Gateway    com.amazonaws.us-east-1.s3           available  PrivateDNS=false
+  vpce-0295d2b028e790587  Interface  com.amazonaws.us-east-1.ssm          available  PrivateDNS=true
+  vpce-0ff61d8900856cd41  Interface  com.amazonaws.us-east-1.ssmmessages  available  PrivateDNS=true
+
+Critical endpoint coverage check:
+    com.amazonaws.us-east-1.eks                             [MISSING] — this AWS service is unreachable
+    com.amazonaws.us-east-1.ecr.api                         [MISSING] — this AWS service is unreachable
+    com.amazonaws.us-east-1.ecr.dkr                         [MISSING] — this AWS service is unreachable
+    com.amazonaws.us-east-1.s3                              [PRESENT]
+    com.amazonaws.us-east-1.sts                             [MISSING] — this AWS service is unreachable
+    com.amazonaws.us-east-1.ec2                             [PRESENT]
+    com.amazonaws.us-east-1.elasticloadbalancing            [MISSING] — this AWS service is unreachable
+    com.amazonaws.us-east-1.autoscaling                     [MISSING] — this AWS service is unreachable
+    com.amazonaws.us-east-1.logs                            [MISSING] — this AWS service is unreachable
+    com.amazonaws.us-east-1.kms                             [MISSING] — this AWS service is unreachable
+    com.amazonaws.us-east-1.secretsmanager                  [MISSING] — this AWS service is unreachable
+    com.amazonaws.us-east-1.ssm                             [PRESENT]
+
+--- VPC Peering Connections ---
+
+
+--- Transit Gateway Attachments ---
+
+
+--- Network ACLs ---
+
+
+--- DHCP Options ---
+
+
+
+################################################################################
+##  09-ecr.sh — ECR Registry, Repositories, Lifecycle Policies
+################################################################################
+
+Region:   us-east-1
+Account:  123456789012
+Registry: 123456789012.dkr.ecr.us-east-1.amazonaws.com
+
+--- ECR Authorization Token ---
+
+[OK] Authorization token retrieved
+{
+  "ProxyEndpoint": "https://123456789012.dkr.ecr.us-east-1.amazonaws.com",
+  "ExpiresAt": "2026-04-16T20:54:23.100000-04:00"
+}
+Token format: [OK] AWS:<password> (standard ECR format)
+
+--- ECR Registry Reachability ---
+
+In this airgapped environment, ECR access requires THREE VPC endpoints:
+  - com.amazonaws.us-east-1.ecr.api  (ECR API calls)
+  - com.amazonaws.us-east-1.ecr.dkr  (Docker registry protocol)
+  - com.amazonaws.us-east-1.s3       (image layer storage)
+Missing any of these = ECR operations will fail.
+
+  HTTPS /v2/ endpoint                                     [OK] HTTP 401 — registry reachable (auth required)
+
+--- ECR Registry Policy ---
+
+[INFO] No registry-level policy set (or access denied)
+
+--- ECR Repositories ---
+
+Total repositories: 2
+
+  vertex-bootstrap/spectro-images  MUTABLE  true
+  vertex-bootstrap/spectro-packs   MUTABLE  true
+
+SpectroCloud-related repositories:
+  vertex-bootstrap/spectro-packs
+  vertex-bootstrap/spectro-images
+
+HNCD-related repositories:
+
+--- Image Counts (sample) ---
+
+  vertex-bootstrap/spectro-packs                     0 images
+  vertex-bootstrap/spectro-images                    0 images
+
+--- ECR Lifecycle Policies (sample) ---
+
+  vertex-bootstrap/spectro-packs:
+    {
+      "rules": [
+        {
+          "rulePriority": 1,
+          "description": "Expire untagged images after 14 days",
+          "selection": {
+            "tagStatus": "untagged",
+            "countType": "sinceImagePushed",
+            "countUnit": "days",
+            "countNumber": 14
+          },
+          "action": {
+            "type": "expire"
+          }
+        }
+      ]
+    }
+  vertex-bootstrap/spectro-images:
+    {
+      "rules": [
+        {
+          "rulePriority": 1,
+          "description": "Expire untagged images after 14 days",
+          "selection": {
+            "tagStatus": "untagged",
+            "countType": "sinceImagePushed",
+            "countUnit": "days",
+            "countNumber": 14
+          },
+          "action": {
+            "type": "expire"
+          }
+        }
+      ]
+    }
+
+--- Container Runtime Status ---
+
+Docker:
+  Client: 27.3.1
+  [client found but cannot query]
+  Server:
+  [daemon not running or no permission]
+  Storage Driver:
+
+Podman:
