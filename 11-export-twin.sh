@@ -398,39 +398,65 @@ AZS=$(aws_json ec2 describe-availability-zones | jq '[.AvailabilityZones[]? | {
     region_name: .RegionName
 }]' 2>/dev/null || echo "[]")
 
+
 # ============================================================
 # Assemble the final JSON document
 # ============================================================
+# Large JSON blobs are written to temp files to avoid ARG_MAX
+# ("argument list too long") on environments with many resources.
+# --slurpfile wraps content in an array, so each variable is
+# referenced as $name[0] inside the jq filter.
+_TWIN_TMP=$(mktemp -d)
+trap 'rm -rf "$_TWIN_TMP"' EXIT
+
+printf '%s' "$VPCS"           > "$_TWIN_TMP/vpcs.json"
+printf '%s' "$SUBNETS"        > "$_TWIN_TMP/subnets.json"
+printf '%s' "$ROUTE_TABLES"   > "$_TWIN_TMP/route_tables.json"
+printf '%s' "$SECURITY_GROUPS"> "$_TWIN_TMP/security_groups.json"
+printf '%s' "$NAT_GATEWAYS"   > "$_TWIN_TMP/nat_gateways.json"
+printf '%s' "$IGWS"           > "$_TWIN_TMP/igws.json"
+printf '%s' "$VPC_ENDPOINTS"  > "$_TWIN_TMP/vpc_endpoints.json"
+printf '%s' "$VPC_PEERING"    > "$_TWIN_TMP/vpc_peering.json"
+printf '%s' "$TGW_ATTACHMENTS"> "$_TWIN_TMP/tgw_attachments.json"
+printf '%s' "$NACLS"          > "$_TWIN_TMP/nacls.json"
+printf '%s' "$DHCP_OPTIONS"   > "$_TWIN_TMP/dhcp_options.json"
+printf '%s' "$EKS_CLUSTERS"   > "$_TWIN_TMP/eks_clusters.json"
+printf '%s' "$ECR_REPOS"      > "$_TWIN_TMP/ecr_repos.json"
+printf '%s' "$IAM_ROLE"       > "$_TWIN_TMP/iam_role.json"
+printf '%s' "$OIDC_PROVIDERS" > "$_TWIN_TMP/oidc_providers.json"
+printf '%s' "$S3_BUCKETS"     > "$_TWIN_TMP/s3_buckets.json"
+printf '%s' "$AZS"            > "$_TWIN_TMP/azs.json"
+
 jq -n \
-    --arg snapshot_time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    --arg source_region "$REGION" \
-    --arg source_partition "$PARTITION" \
-    --arg source_account "$ACCOUNT" \
-    --arg caller_arn "$CALLER_ARN" \
-    --arg instance_id "$INSTANCE_ID" \
-    --arg instance_type "$INSTANCE_TYPE" \
-    --arg ami_id "$AMI_ID" \
-    --arg az "$AZ" \
-    --arg private_ip "$PRIVATE_IP" \
-    --arg instance_vpc "$INSTANCE_VPC" \
-    --arg instance_subnet "$INSTANCE_SUBNET" \
-    --argjson vpcs "$VPCS" \
-    --argjson subnets "$SUBNETS" \
-    --argjson route_tables "$ROUTE_TABLES" \
-    --argjson security_groups "$SECURITY_GROUPS" \
-    --argjson nat_gateways "$NAT_GATEWAYS" \
-    --argjson internet_gateways "$IGWS" \
-    --argjson vpc_endpoints "$VPC_ENDPOINTS" \
-    --argjson vpc_peering "$VPC_PEERING" \
-    --argjson tgw_attachments "$TGW_ATTACHMENTS" \
-    --argjson nacls "$NACLS" \
-    --argjson dhcp_options "$DHCP_OPTIONS" \
-    --argjson eks_clusters "$EKS_CLUSTERS" \
-    --argjson ecr_repositories "$ECR_REPOS" \
-    --argjson iam_role "$IAM_ROLE" \
-    --argjson oidc_providers "$OIDC_PROVIDERS" \
-    --argjson s3_buckets "$S3_BUCKETS" \
-    --argjson availability_zones "$AZS" \
+    --arg snapshot_time     "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg source_region     "$REGION" \
+    --arg source_partition  "$PARTITION" \
+    --arg source_account    "$ACCOUNT" \
+    --arg caller_arn        "$CALLER_ARN" \
+    --arg instance_id       "$INSTANCE_ID" \
+    --arg instance_type     "$INSTANCE_TYPE" \
+    --arg ami_id            "$AMI_ID" \
+    --arg az                "$AZ" \
+    --arg private_ip        "$PRIVATE_IP" \
+    --arg instance_vpc      "$INSTANCE_VPC" \
+    --arg instance_subnet   "$INSTANCE_SUBNET" \
+    --slurpfile vpcs              "$_TWIN_TMP/vpcs.json" \
+    --slurpfile subnets           "$_TWIN_TMP/subnets.json" \
+    --slurpfile route_tables      "$_TWIN_TMP/route_tables.json" \
+    --slurpfile security_groups   "$_TWIN_TMP/security_groups.json" \
+    --slurpfile nat_gateways      "$_TWIN_TMP/nat_gateways.json" \
+    --slurpfile internet_gateways "$_TWIN_TMP/igws.json" \
+    --slurpfile vpc_endpoints     "$_TWIN_TMP/vpc_endpoints.json" \
+    --slurpfile vpc_peering       "$_TWIN_TMP/vpc_peering.json" \
+    --slurpfile tgw_attachments   "$_TWIN_TMP/tgw_attachments.json" \
+    --slurpfile nacls             "$_TWIN_TMP/nacls.json" \
+    --slurpfile dhcp_options      "$_TWIN_TMP/dhcp_options.json" \
+    --slurpfile eks_clusters      "$_TWIN_TMP/eks_clusters.json" \
+    --slurpfile ecr_repositories  "$_TWIN_TMP/ecr_repos.json" \
+    --slurpfile iam_role          "$_TWIN_TMP/iam_role.json" \
+    --slurpfile oidc_providers    "$_TWIN_TMP/oidc_providers.json" \
+    --slurpfile s3_buckets        "$_TWIN_TMP/s3_buckets.json" \
+    --slurpfile availability_zones "$_TWIN_TMP/azs.json" \
 '{
     _metadata: {
         schema_version: "1.0",
@@ -462,28 +488,28 @@ jq -n \
         }
     },
     network: {
-        vpcs: $vpcs,
-        subnets: $subnets,
-        route_tables: $route_tables,
-        security_groups: $security_groups,
-        nat_gateways: $nat_gateways,
-        internet_gateways: $internet_gateways,
-        vpc_endpoints: $vpc_endpoints,
-        vpc_peering: $vpc_peering,
-        transit_gateway_attachments: $tgw_attachments,
-        network_acls: $nacls,
-        dhcp_options: $dhcp_options,
-        availability_zones: $availability_zones
+        vpcs:                         $vpcs[0],
+        subnets:                      $subnets[0],
+        route_tables:                 $route_tables[0],
+        security_groups:              $security_groups[0],
+        nat_gateways:                 $nat_gateways[0],
+        internet_gateways:            $internet_gateways[0],
+        vpc_endpoints:                $vpc_endpoints[0],
+        vpc_peering:                  $vpc_peering[0],
+        transit_gateway_attachments:  $tgw_attachments[0],
+        network_acls:                 $nacls[0],
+        dhcp_options:                 $dhcp_options[0],
+        availability_zones:           $availability_zones[0]
     },
-    eks: $eks_clusters,
+    eks: $eks_clusters[0],
     ecr: {
-        repositories: $ecr_repositories
+        repositories: $ecr_repositories[0]
     },
     iam: {
-        caller_role: $iam_role,
-        oidc_providers: $oidc_providers
+        caller_role:    $iam_role[0],
+        oidc_providers: $oidc_providers[0]
     },
     s3: {
-        buckets: $s3_buckets
+        buckets: $s3_buckets[0]
     }
 }'

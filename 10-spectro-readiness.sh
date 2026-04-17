@@ -87,7 +87,7 @@ if [[ -n "$ROLES" ]]; then
             --query 'AttachedPolicies | length(@)' --output text 2>/dev/null || continue)
         if (( COUNT >= 8 )); then
             warn "${R}: ${COUNT}/10 policies attached"
-            ((SATURATED++))
+            SATURATED=$((SATURATED+1))
         fi
         sleep 0.1  # Rate-limit to avoid IAM API throttling
     done

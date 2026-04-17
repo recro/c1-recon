@@ -45,7 +45,7 @@ for script in "${SCRIPTS[@]}"; do
     script_path="${SCRIPT_DIR}/${script}"
     if [[ ! -x "$script_path" ]]; then
         echo "[SKIP] ${script} — not found or not executable" | tee -a "$REPORT"
-        ((SKIP++))
+        SKIP=$((SKIP+1))
         continue
     fi
 
@@ -54,11 +54,11 @@ for script in "${SCRIPTS[@]}"; do
     if "$script_path" 2>&1 | tee -a "$REPORT"; then
         echo "" | tee -a "$REPORT"
         echo "[DONE] ${script} completed successfully" | tee -a "$REPORT"
-        ((PASS++))
+        PASS=$((PASS+1))
     else
         echo "" | tee -a "$REPORT"
         echo "[WARN] ${script} exited with errors (may be expected if permissions are restricted)" | tee -a "$REPORT"
-        ((FAIL++))
+        FAIL=$((FAIL+1))
     fi
 done
 

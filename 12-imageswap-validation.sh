@@ -299,9 +299,9 @@ if [[ -n "$ALL_REPOS" && "$ALL_REPOS" != "null" ]]; then
             --query 'imageDetails | length(@)' --output text 2>/dev/null || echo "?")
         if [[ "$IMG_COUNT" == "0" ]]; then
             warn "Empty: ${REPO}"
-            ((EMPTY_COUNT++))
+            EMPTY_COUNT=$((EMPTY_COUNT+1))
         fi
-        ((SAMPLE_CHECKED++))
+        SAMPLE_CHECKED=$((SAMPLE_CHECKED+1))
         sleep 0.05  # Light rate-limiting
     done
 
@@ -312,7 +312,7 @@ if [[ -n "$ALL_REPOS" && "$ALL_REPOS" != "null" ]]; then
             --query 'imageDetails | length(@)' --output text 2>/dev/null || echo "?")
         if [[ "$IMG_COUNT" == "0" ]]; then
             warn "Empty pack repo: ${REPO}"
-            ((EMPTY_COUNT++))
+            EMPTY_COUNT=$((EMPTY_COUNT+1))
         fi
     done
 
@@ -370,10 +370,10 @@ if $HAS_KUBECTL; then
             # Check if image points to ECR (mutated) or upstream (not mutated)
             if echo "$IMG" | grep -qE "ecr\.(us-gov-west-1|${REGION})\.amazonaws\.com|public\.ecr\.aws"; then
                 echo "[ECR] ✓"
-                ((MUTATION_OK++))
+                MUTATION_OK=$((MUTATION_OK+1))
             elif echo "$IMG" | grep -qE "gcr\.io|us-docker\.pkg\.dev|registry\.k8s\.io|docker\.io|quay\.io|ghcr\.io"; then
                 echo "[UPSTREAM] ← NOT MUTATED"
-                ((MUTATION_UPSTREAM++))
+                MUTATION_UPSTREAM=$((MUTATION_UPSTREAM+1))
                 MUTATION_ERRORS+="    ${NS}: ${IMG}\n"
             else
                 echo "[OTHER]"
