@@ -2,6 +2,11 @@
 # 01-identity.sh — Who am I? STS identity, instance metadata, attached roles
 set -euo pipefail
 
+# shellcheck source=lib.sh
+_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+[[ -f "${_LIB_DIR}/lib.sh" ]] && source "${_LIB_DIR}/lib.sh" || { echo "[ERROR] lib.sh not found — run scripts from their directory"; exit 1; }
+
 IMDS_TOKEN_TTL=21600
 section() { echo ""; echo "--- $1 ---"; echo ""; }
 
@@ -61,11 +66,8 @@ fi
 
 # ---------- STS Caller Identity ----------
 section "STS Caller Identity"
-if command -v aws &>/dev/null; then
-    aws sts get-caller-identity --output json 2>&1 | jq . 2>/dev/null || aws sts get-caller-identity 2>&1
-else
-    echo "[SKIP] AWS CLI not found"
-fi
+echo "Running sts_preflight to classify credential status..."
+sts_preflight || true
 
 # ---------- Region Detection ----------
 section "Effective Region"

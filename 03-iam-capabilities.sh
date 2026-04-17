@@ -4,27 +4,59 @@
 # Every call here is non-destructive — list/describe/get operations only.
 set -euo pipefail
 
+# shellcheck source=lib.sh
+_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+[[ -f "${_LIB_DIR}/lib.sh" ]] && source "${_LIB_DIR}/lib.sh" || { echo "[ERROR] lib.sh not found — run scripts from their directory"; exit 1; }
+
 section() { echo ""; echo "--- $1 ---"; echo ""; }
 probe() {
     local label="$1"
     shift
     printf "  %-55s " "$label"
-    if OUTPUT=$("$@" 2>&1); then
+
+    local _probe_tmp _probe_out _probe_rc
+    _probe_tmp=$(mktemp)
+    _probe_out=$("$@" 2>"$_probe_tmp")
+    _probe_rc=$?
+    local _probe_err
+    _probe_err=$(cat "$_probe_tmp"); rm -f "$_probe_tmp"
+
+    if [[ $_probe_rc -eq 0 ]]; then
         echo "[ALLOWED]"
         return 0
-    else
-        if echo "$OUTPUT" | grep -qi "AccessDenied\|UnauthorizedAccess\|not authorized\|forbidden"; then
-            echo "[DENIED]"
-        elif echo "$OUTPUT" | grep -qi "NoSuchEntity\|NotFoundException\|ResourceNotFoundException"; then
-            echo "[ALLOWED] (resource not found)"
-        elif echo "$OUTPUT" | grep -qi "InvalidParameterValue\|ValidationError"; then
-            echo "[ALLOWED] (param error — call was accepted)"
-        else
-            echo "[ERROR] $(echo "$OUTPUT" | head -1 | cut -c1-80)"
-        fi
-        return 0  # Don't fail the script — denial is expected diagnostic data
     fi
+
+    # Combine stdout+stderr for classification (some AWS errors go to stdout)
+    local _combined="${_probe_out} ${_probe_err}"
+    if   grep -qi "AccessDenied\|is not authorized\|UnauthorizedAccess\|forbidden"     <<< "$_combined"; then
+        echo "[DENIED]"
+    elif grep -qi "NoSuchEntity\|NotFoundException\|ResourceNotFound\|does not exist"  <<< "$_combined"; then
+        echo "[ALLOWED] (resource not found — call accepted)"
+    elif grep -qi "InvalidParameterValue\|ValidationError\|InvalidAction"               <<< "$_combined"; then
+        echo "[ALLOWED] (param/validation error — call reached service)"
+    elif grep -qi "ExpiredToken\|TokenRefreshRequired"                                   <<< "$_combined"; then
+        echo "[CREDENTIAL ERROR] token expired — check IMDS/instance profile"
+    elif grep -qi "Unable to locate credentials\|NoCredentialProviders"                  <<< "$_combined"; then
+        echo "[CREDENTIAL ERROR] no credentials — verify instance profile is attached"
+    elif grep -qi "Could not connect\|ConnectTimeout\|ReadTimeout\|Endpoint URL cannot be reached\|socket" <<< "$_combined"; then
+        echo "[NETWORK ERROR] endpoint unreachable — VPC endpoint may be missing"
+        printf "  %-55s   ↳ %s\n" "" "$(echo "$_probe_err" | grep -i 'error\|connect\|endpoint' | head -1 | cut -c1-100)"
+    elif grep -qi "RequestExpired\|Request has expired"                                  <<< "$_combined"; then
+        echo "[CLOCK SKEW] system clock out of sync with AWS (>5 min)"
+    else
+        # Unknown error — show first useful line
+        local _msg
+        _msg=$(echo "$_probe_err" | grep -v '^$' | head -1 | cut -c1-100)
+        [[ -z "$_msg" ]] && _msg=$(echo "$_probe_out" | grep -v '^$' | head -1 | cut -c1-100)
+        echo "[ERROR] ${_msg:-unknown error}"
+    fi
+    return 0  # Never fail the script — denial/error is the diagnostic data
 }
+
+# Credential check — if STS broken, all probes return the same error;
+# preflight makes the root cause clear.
+sts_preflight || true
 
 section "IAM Capabilities Probe"
 echo "Testing read-only API calls to determine effective permissions."

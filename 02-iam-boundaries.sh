@@ -2,10 +2,19 @@
 # 02-iam-boundaries.sh — Permissions boundary detection and effective policy enumeration
 set -euo pipefail
 
+# shellcheck source=lib.sh
+_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+[[ -f "${_LIB_DIR}/lib.sh" ]] && source "${_LIB_DIR}/lib.sh" || { echo "[ERROR] lib.sh not found — run scripts from their directory"; exit 1; }
+
 section() { echo ""; echo "--- $1 ---"; echo ""; }
 
+# Credential check first — if STS is unreachable, diagnose before spending
+# time on IAM calls that will all fail for the same reason.
+sts_preflight || true
+
 # Determine our identity
-IDENTITY=$(aws sts get-caller-identity --output json 2>/dev/null)
+IDENTITY=$(aws_safe sts get-caller-identity --output json) || true
 if [[ -z "$IDENTITY" ]]; then
     echo "[FAIL] Cannot call sts:GetCallerIdentity — no valid credentials"
     exit 1

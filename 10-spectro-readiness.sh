@@ -4,6 +4,11 @@
 # Reference: docs.spectrocloud.com/clusters/public-cloud/aws/
 set -euo pipefail
 
+# shellcheck source=lib.sh
+_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+[[ -f "${_LIB_DIR}/lib.sh" ]] && source "${_LIB_DIR}/lib.sh" || { echo "[ERROR] lib.sh not found — run scripts from their directory"; exit 1; }
+
 section() { echo ""; echo "--- $1 ---"; echo ""; }
 ok()   { echo "  [OK]   $1"; }
 warn() { echo "  [WARN] $1"; }
@@ -17,8 +22,11 @@ if [[ -n "$_IMDS_TOKEN" ]]; then
         "http://169.254.169.254/latest/meta-data/placement/region" 2>/dev/null) || true
 fi
 REGION="${REGION:-${AWS_DEFAULT_REGION:-us-gov-west-1}}"
+# ── Credential check — diagnoses STS/credential failures before AWS calls ──
+sts_preflight || true  # non-fatal: outputs diagnosis, scripts continue for non-AWS checks
 
-ACCOUNT=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "unknown")
+
+ACCOUNT=$(aws_safe sts get-caller-identity --query Account --output text) || ACCOUNT="unknown"
 PARTITION="aws"
 [[ "$REGION" == *"gov"* ]] && PARTITION="aws-us-gov"
 
@@ -35,7 +43,7 @@ echo "Exceeding this causes silent deployment failures."
 echo ""
 
 # Determine caller identity type
-ARN=$(aws sts get-caller-identity --query Arn --output text 2>/dev/null)
+ARN=$(aws_safe sts get-caller-identity --query Arn --output text) || ARN=""
 ROLE_NAME=""
 if [[ "$ARN" == *":assumed-role/"* ]]; then
     ROLE_NAME=$(echo "$ARN" | sed 's|.*:assumed-role/||' | cut -d/ -f1)

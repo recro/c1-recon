@@ -48,8 +48,44 @@ _ASSUME_OUT=$(aws sts assume-role \
     --output json 2>&1)
 
 if ! echo "$_ASSUME_OUT" | jq -e '.Credentials' > /dev/null 2>&1; then
-    echo "[ERROR] sts:AssumeRole failed:" >&2
-    echo "$_ASSUME_OUT" >&2
+    echo "[FAIL] sts:AssumeRole failed" >&2
+    echo "       Raw error: ${_ASSUME_OUT}" >&2
+    echo "" >&2
+    # Classify the error using lib.sh if available, otherwise inline
+    if declare -f classify_aws_error > /dev/null 2>&1; then
+        classify_aws_error "$_ASSUME_OUT"
+        case "${_AWS_ERR_CLASS:-unknown}" in
+            denied)
+                echo "[DIAGNOSIS] sts:AssumeRole denied by policy." >&2
+                echo "  - Verify the trust policy on '${_ROLE_ARN}' allows this principal to assume it." >&2
+                echo "  - Verify the caller's permission policy allows sts:AssumeRole on this role ARN." >&2
+                echo "  - Check for a permissions boundary that blocks sts:AssumeRole." >&2
+                ;;
+            network)
+                echo "[DIAGNOSIS] Cannot reach the STS endpoint." >&2
+                echo "  - In C1D, STS requires VPC endpoint: com.amazonaws.us-gov-west-1.sts" >&2
+                echo "  - Check: aws ec2 describe-vpc-endpoints --filters 'Name=service-name,Values=*sts*'" >&2
+                ;;
+            no_credentials|expired_token|invalid_credentials)
+                echo "[DIAGNOSIS] Caller's own credentials are not valid (${_AWS_ERR_CLASS})." >&2
+                echo "  - Fix the caller's credentials before attempting to assume another role." >&2
+                ;;
+            *)
+                echo "[DIAGNOSIS] Unknown failure — see raw error above." >&2
+                ;;
+        esac
+    else
+        # lib.sh not loaded — inline classification
+        if   grep -qi "AccessDenied\|is not authorized" <<< "$_ASSUME_OUT"; then
+            echo "[DIAGNOSIS] sts:AssumeRole denied. Check trust policy on '${_ROLE_ARN}'." >&2
+        elif grep -qi "Could not connect\|ConnectTimeout\|Endpoint URL" <<< "$_ASSUME_OUT"; then
+            echo "[DIAGNOSIS] Network error — STS VPC endpoint may be missing in this VPC." >&2
+        elif grep -qi "Unable to locate credentials\|NoCredentialProviders" <<< "$_ASSUME_OUT"; then
+            echo "[DIAGNOSIS] No credentials for the caller — fix caller creds first." >&2
+        elif grep -qi "ExpiredToken" <<< "$_ASSUME_OUT"; then
+            echo "[DIAGNOSIS] Caller's token expired — check IMDS / instance profile refresh." >&2
+        fi
+    fi
     unset _ROLE_ARN _SESSION_NAME _DURATION _ASSUME_OUT
     return 1
 fi

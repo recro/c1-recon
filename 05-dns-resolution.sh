@@ -3,6 +3,11 @@
 # Key diagnostic for the OIDC provider issue (oidc.eks not resolving from cluster)
 set -euo pipefail
 
+# shellcheck source=lib.sh
+_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+[[ -f "${_LIB_DIR}/lib.sh" ]] && source "${_LIB_DIR}/lib.sh" || { echo "[ERROR] lib.sh not found — run scripts from their directory"; exit 1; }
+
 section() { echo ""; echo "--- $1 ---"; echo ""; }
 
 # Detect region
@@ -13,6 +18,9 @@ if [[ -n "$_IMDS_TOKEN" ]]; then
         "http://169.254.169.254/latest/meta-data/placement/region" 2>/dev/null) || true
 fi
 REGION="${REGION:-${AWS_DEFAULT_REGION:-us-gov-west-1}}"
+# ── Credential check — diagnoses STS/credential failures before AWS calls ──
+sts_preflight || true  # non-fatal: outputs diagnosis, scripts continue for non-AWS checks
+
 
 echo "Region: ${REGION}"
 
@@ -93,7 +101,7 @@ section "ECR Endpoints"
 dns_check "ECR API"               "api.ecr.${REGION}.amazonaws.com"
 dns_check "ECR DKR"               "dkr.ecr.${REGION}.amazonaws.com"
 # Account-specific ECR
-ACCOUNT=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
+ACCOUNT=$(aws_safe sts get-caller-identity --query Account --output text) || ACCOUNT=""
 if [[ -n "$ACCOUNT" ]]; then
     dns_check "ECR (account)" "${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com"
 fi

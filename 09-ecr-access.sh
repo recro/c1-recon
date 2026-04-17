@@ -2,6 +2,11 @@
 # 09-ecr-access.sh — ECR authentication test, repository listing, image pull test
 set -euo pipefail
 
+# shellcheck source=lib.sh
+_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+[[ -f "${_LIB_DIR}/lib.sh" ]] && source "${_LIB_DIR}/lib.sh" || { echo "[ERROR] lib.sh not found — run scripts from their directory"; exit 1; }
+
 section() { echo ""; echo "--- $1 ---"; echo ""; }
 
 _IMDS_TOKEN=$(curl -sfm 2 -X PUT "http://169.254.169.254/latest/api/token" \
@@ -11,8 +16,11 @@ if [[ -n "$_IMDS_TOKEN" ]]; then
         "http://169.254.169.254/latest/meta-data/placement/region" 2>/dev/null) || true
 fi
 REGION="${REGION:-${AWS_DEFAULT_REGION:-us-gov-west-1}}"
+# ── Credential check — diagnoses STS/credential failures before AWS calls ──
+sts_preflight || true  # non-fatal: outputs diagnosis, scripts continue for non-AWS checks
 
-ACCOUNT=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "unknown")
+
+ACCOUNT=$(aws_safe sts get-caller-identity --query Account --output text) || ACCOUNT="unknown"
 ECR_REGISTRY="${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com"
 
 echo "Region:   ${REGION}"

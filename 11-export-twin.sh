@@ -13,6 +13,11 @@
 # the twin accurately. Review before sharing outside the team.
 set -euo pipefail
 
+# shellcheck source=lib.sh
+_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+[[ -f "${_LIB_DIR}/lib.sh" ]] && source "${_LIB_DIR}/lib.sh" || { echo "[ERROR] lib.sh not found — run scripts from their directory"; exit 1; }
+
 # ---------- Bootstrap ----------
 _IMDS_TOKEN=$(curl -sfm 2 -X PUT "http://169.254.169.254/latest/api/token" \
     -H "X-aws-ec2-metadata-token-ttl-seconds: 60" 2>/dev/null) || true
@@ -21,6 +26,9 @@ if [[ -n "$_IMDS_TOKEN" ]]; then
         "http://169.254.169.254/latest/meta-data/placement/region" 2>/dev/null) || true
 fi
 REGION="${REGION:-${AWS_DEFAULT_REGION:-us-gov-west-1}}"
+# ── Credential check — diagnoses STS/credential failures before AWS calls ──
+sts_preflight || true  # non-fatal: outputs diagnosis, scripts continue for non-AWS checks
+
 
 
 # ── Optional role assumption ─────────────────────────────────────────────────
@@ -32,8 +40,8 @@ if [[ -n "${AWS_ROLE_ARN:-}" ]]; then
     source "${_SCRIPT_DIR}/assume-role.sh" >&2
 fi
 
-ACCOUNT=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "unknown")
-CALLER_ARN=$(aws sts get-caller-identity --query Arn --output text 2>/dev/null || echo "unknown")
+ACCOUNT=$(aws_safe sts get-caller-identity --query Account --output text) || ACCOUNT="unknown"
+CALLER_ARN=$(aws_safe sts get-caller-identity --query Arn --output text) || CALLER_ARN="unknown"
 PARTITION="aws"
 [[ "$REGION" == *"gov"* ]] && PARTITION="aws-us-gov"
 
@@ -59,7 +67,8 @@ fi
 
 # Helper: run AWS CLI, return JSON or null
 aws_json() {
-    aws "$@" --output json --region "$REGION" 2>/dev/null || echo "null"
+    # aws_safe writes classified errors to stderr; stdout is empty on failure
+    aws_safe "$@" --output json --region "$REGION" || echo "null"
 }
 
 # ============================================================
