@@ -7,69 +7,133 @@ Estimated time: **45–60 minutes total** (mostly waiting on pipeline jobs).
 
 ## What We're Doing Today
 
-1. Register the GitLab runner on a GovCloud EC2 *(~10 min)*
-2. Verify it shows online in LevelUp *(~2 min)*
-3. Run the `preflight` job — confirm tools + AWS creds *(~2 min)*
-4. Run the `recon` job — full 13-script diagnostic sweep *(~15 min)*
-5. Run the `export-twin` job — JSON environment snapshot *(~5 min)*
-6. Download and stash the artifacts
+1. Get onto the right EC2 and register the GitLab runner *(~10 min)*
+2. Confirm the runner shows online in LevelUp *(~2 min)*
+3. Trigger and watch the `preflight` job — confirms tools + AWS creds *(~2 min)*
+4. Trigger and watch the `recon` job — 13-script diagnostic sweep *(~15 min)*
+5. Trigger and watch the `export-twin` job — JSON environment snapshot *(~5 min)*
+6. Download and stash the artifacts *(~5 min)*
+7. Enable the weekly schedule *(~2 min)*
 
-That's it. No code changes today. Pure execution.
+No code changes today. Pure execution.
 
 ---
 
 ## Pre-Session Checklist
 
-Before you RDP in, confirm:
+Before you do anything else, confirm you have:
 
-- [ ] RDP credentials for a GovCloud EC2 that has outbound HTTPS to `code.levelup.cce.af.mil`
-- [ ] That EC2 has the AWS CLI v2 available (or an instance profile that provides credentials)
-- [ ] You have a browser open to: `https://code.levelup.cce.af.mil/siem-devgroup/siem/c1-recon`
-- [ ] You're logged into LevelUp as `cwilson613` (or ask Chris)
+- [ ] **The EC2 to use.** You need an EC2 inside the C1 GovCloud VPC that can reach `code.levelup.cce.af.mil` over HTTPS. If you don't know which one, ask Marcus Gales — he'll give you an IP or hostname and login credentials.
+- [ ] **RDP access** to that EC2 (or SSH — either works).
+- [ ] A browser tab open and logged into LevelUp:
+  `https://code.levelup.cce.af.mil/siem-devgroup/siem/c1-recon`
+  Log in as `cwilson613`. If you don't have credentials, ask Chris Wilson.
+- [ ] **Maintainer role** on the c1-recon project — needed to see the runners settings page in Step 3. `cwilson613` already has this. If you're using a different account, ask Chris to grant it.
 
 ---
 
-## Step 1 — RDP in and Get the Script onto the EC2
+## Step 1 — Get onto the EC2 and Open a Terminal
 
-Once you're on the GovCloud EC2:
+**If accessing via RDP (Windows desktop on the EC2):**
+Once connected, open a terminal. Look for:
+- A "Terminal" icon on the desktop or taskbar
+- Right-click the desktop → "Open Terminal"
+- Or press `Super` key and type "terminal"
 
+**If accessing via SSH directly:**
 ```bash
-# Option A: Clone directly (if the EC2 can reach code.levelup.cce.af.mil)
-git clone https://code.levelup.cce.af.mil/siem-devgroup/siem/c1-recon.git
-cd c1-recon
+ssh ec2-user@<ip-address-from-Marcus>
 ```
 
+Once you have a terminal prompt, create a working directory:
 ```bash
-# Option B: If git clone fails, grab just the setup script via curl
+mkdir -p ~/recon && cd ~/recon
+```
+
+All commands for the rest of this guide run from `~/recon`.
+
+---
+
+## Step 2 — Get the Setup Script onto the EC2
+
+Try these options in order. Stop at the first one that works.
+
+**Option A — Clone the repo (fastest, requires git + LevelUp access from the EC2):**
+```bash
+cd ~/recon
+git clone https://code.levelup.cce.af.mil/siem-devgroup/siem/c1-recon.git .
+```
+If it asks for a username/password, use `cwilson613` and the LevelUp personal access token (ask Chris if you don't have it). If it hangs or errors, try Option B.
+
+**Option B — Download just the setup script via curl:**
+```bash
+cd ~/recon
 curl -sk https://code.levelup.cce.af.mil/siem-devgroup/siem/c1-recon/-/raw/main/setup-runner.sh \
   -o setup-runner.sh
 chmod +x setup-runner.sh
 ```
+If curl errors or the file is empty, try Option C.
 
+**Option C — Transfer via S3 (for when the EC2 can't reach LevelUp at all):**
+
+First, from your local machine (not the EC2):
 ```bash
-# Option C: If the EC2 can't reach LevelUp at all — transfer via S3
-# (Run this from your local machine or a connected jumpbox first)
 curl -sk https://raw.githubusercontent.com/recro/c1-recon/main/setup-runner.sh \
   -o setup-runner.sh
 aws s3 cp setup-runner.sh s3://hncd-airgap-transfer/tools/setup-runner.sh
+```
 
-# Then on the EC2:
+Then, back on the EC2:
+```bash
+cd ~/recon
 aws s3 cp s3://hncd-airgap-transfer/tools/setup-runner.sh setup-runner.sh
 chmod +x setup-runner.sh
 ```
 
-**✓ Done when:** `setup-runner.sh` is on the EC2 and executable.
+**Quick sanity check — confirm you got the right file:**
+```bash
+head -3 setup-runner.sh
+```
+You should see:
+```
+#!/usr/bin/env bash
+# setup-runner.sh — Register and start the c1-recon GitLab Runner on an EC2 instance
+```
+If you see HTML or an error message instead, the download failed — try the next option.
+
+**✓ Done when:** `head -3 setup-runner.sh` shows the bash shebang and comment.
 
 ---
 
-## Step 2 — Run the Setup Script
+## Step 3 — Install AWS CLI (if needed)
+
+The setup script requires `aws` to be present. Check first:
+```bash
+aws --version
+```
+
+If that prints `aws-cli/2.x.x ...` you're good — skip to Step 4.
+
+If you get `command not found`, also download and run the AWS CLI installer:
+```bash
+# Download (same three options as Step 2 — replace filename with install-awscli.sh)
+curl -sk https://code.levelup.cce.af.mil/siem-devgroup/siem/c1-recon/-/raw/main/install-awscli.sh \
+  -o install-awscli.sh
+chmod +x install-awscli.sh
+sudo ./install-awscli.sh
+```
+The script tries to download AWS CLI directly, then falls back to S3 if the internet is unreachable.
+
+---
+
+## Step 4 — Run the Setup Script
 
 ```bash
+cd ~/recon
 sudo ./setup-runner.sh
 ```
 
-**What you'll see:**
-
+**What you'll see (expected output):**
 ```
 [INFO]  === c1-recon GitLab Runner Setup ===
 [INFO]  Host:        ip-10-x-x-x
@@ -89,54 +153,68 @@ sudo ./setup-runner.sh
 ...
 [INFO]  Step 5: Verifying AWS credentials
 [INFO]  AWS identity confirmed:
-          Account: 123456789012
-          User/Role: arn:aws-us-gov:sts::...
+          Account:   123456789012
+          Role/User: arn:aws-us-gov:sts::...
 ...
 [INFO]  === Setup complete ===
 ```
 
 **If you see errors:**
 
-| Error | Fix |
-|-------|-----|
-| `aws cli not found` | Install aws cli v2 first: `sudo ./install-awscli.sh` or via S3 (see `DEPLOYMENT_PLAN.md` fallback) |
-| `gitlab-runner install failed` | packages.gitlab.com unreachable — use the [manual binary fallback](#appendix-manual-gitlab-runner-install) below |
-| `AWS identity failed` | Instance profile may be missing — check IAM role attached to EC2; scripts will still run but AWS calls will fail |
-| `systemctl: not found` | Non-systemd host — run `gitlab-runner run &` manually instead |
+| Error message | What to do |
+|---|---|
+| `aws cli not found` | Run `sudo ./install-awscli.sh` (Step 3), then re-run setup |
+| `Could not reach packages.gitlab.com` | Follow the [manual gitlab-runner install](#appendix-manual-gitlab-runner-install) in the Appendix below |
+| `Service did not start after 15 seconds` | Run `sudo journalctl -u gitlab-runner -n 30` and send the output to Chris |
+| `AWS sts get-caller-identity failed` | Runner is registered and will start. AWS calls inside the recon scripts will fail. Ask Marcus to confirm an IAM instance profile is attached to this EC2. |
+| `Run with sudo` | You forgot `sudo` — re-run as `sudo ./setup-runner.sh` |
 
-**✓ Done when:** Script exits with `gitlab-runner service: ACTIVE` and AWS identity is confirmed.
+**✓ Done when:** You see `=== Setup complete ===` at the bottom.
 
 ---
 
-## Step 3 — Verify Runner Shows Online in LevelUp
+## Step 5 — Confirm the Runner is Online in LevelUp
 
-1. Open: `https://code.levelup.cce.af.mil/siem-devgroup/siem/c1-recon/-/settings/ci_cd`
-2. Expand **Runners**
-3. Find **`c1-recon-airgapped-<hostname>`** — it should show a **green dot** (online)
+1. In your browser, go to:
+   `https://code.levelup.cce.af.mil/siem-devgroup/siem/c1-recon/-/settings/ci_cd`
+   *(If you don't see a Settings menu, you don't have Maintainer role — ask Chris to check.)*
 
-**If it shows offline/red:**
+2. Scroll down to the **Runners** section and click **Expand**.
+
+3. Look for a runner named **`c1-recon-airgapped-<hostname>`** with a **green dot** next to it.
+   - Green dot = online and ready
+   - Grey dot = not yet connected — wait 60 seconds and refresh (it polls every 30s)
+   - Red / no dot = something went wrong — see below
+
+**If the runner shows grey after 2 minutes:**
 ```bash
-# On the EC2 — check service status
+# Back on the EC2
 sudo systemctl status gitlab-runner
-sudo journalctl -u gitlab-runner -n 50
-
-# If it's running but showing offline in GitLab, wait 60s and refresh —
-# it polls every 30 seconds
+sudo journalctl -u gitlab-runner -n 30
 ```
+Look for connection errors and send them to Chris.
 
-**✓ Done when:** Green dot next to the runner in the GitLab UI.
+**✓ Done when:** Green dot in the GitLab UI.
 
 ---
 
-## Step 4 — Run the Preflight Job
+## Step 6 — Run the Preflight Job
+
+The preflight job confirms the runner has all the tools it needs before we run the full diagnostic.
 
 1. Go to: `https://code.levelup.cce.af.mil/siem-devgroup/siem/c1-recon/-/pipelines`
-2. Click **Run pipeline** (blue button, top right)
-3. Branch: `main` → click **Run pipeline**
-4. The `preflight` job starts automatically — click it to watch live output
 
-**What you're looking for:**
+2. Click the blue **Run pipeline** button (top right corner).
+
+3. On the next screen, leave the branch as `main` and click the blue **Run pipeline** button again.
+
+4. You'll land on a pipeline status page. The `preflight` job should start automatically. Click its name to watch the live output.
+
+**What a passing preflight looks like:**
 ```
+=== c1-recon preflight ===
+Runner hostname: ip-10-x-x-x
+
   bash            [OK] /bin/bash
   aws             [OK] /usr/local/bin/aws
   jq              [OK] /usr/bin/jq
@@ -144,57 +222,73 @@ sudo journalctl -u gitlab-runner -n 50
   openssl         [OK] /usr/bin/openssl
 
 Optional tools:
-  kubectl         [not available]     ← OK for today, note it
-  helm            [not available]     ← OK for today
+  kubectl         [not available]   ← this is fine for today
+  helm            [not available]   ← this is fine for today
   dig             [OK]
-  ...
 
+{
+    "UserId": "AROAEXAMPLE",
+    "Account": "123456789012",
+    "Arn": "arn:aws-us-gov:sts::123456789012:assumed-role/..."
+}
 Preflight passed.
 ```
 
-**If preflight fails on missing tools:**
+**If preflight fails because a tool is missing:**
 ```bash
-# On the EC2
+# Back on the EC2
 sudo dnf install -y jq bind-utils openssl curl
-sudo systemctl restart gitlab-runner
 ```
-Then re-run the pipeline.
+Then go back to the pipeline list and click **Run pipeline** again.
 
-**Note on kubectl:** If not available, scripts 07 (EKS), 10 (Palette), and 12 (ImageSwap pod checks) will skip their Kubernetes sections. The AWS API sections still run. Note whether kubectl is present — we may want to configure it on a second pass.
+**Note on kubectl:** If it shows `[not available]`, that's fine today. Scripts 07, 10, and 12 will skip their Kubernetes-specific sections and still run the AWS API sections. Make a note of whether kubectl is present — we may configure it on a follow-up session.
 
-**✓ Done when:** Preflight job shows ✅ green.
-
----
-
-## Step 5 — Run the Recon Job
-
-1. In the same pipeline, click the **▶ play button** next to the `recon` job (it's manual — won't auto-start)
-2. Watch the live output — it runs scripts 01 through 12 sequentially
-3. **Expected runtime: 10–15 minutes**
-
-**What to watch for during the run:**
-
-| Script | Key signal |
-|--------|-----------|
-| `01-identity.sh` | Confirms which role/account we're in |
-| `02-iam-boundaries.sh` | Shows the permissions boundary policy — lots of DENYs is expected and informative |
-| `04-network-egress.sh` | Can we reach LevelUp? Any other egress? |
-| `05-dns-resolution.sh` | **Does `oidc.eks.us-gov-west-1.amazonaws.com` resolve?** This is the CAPA blocker question |
-| `08-vpc-environment.sh` | Lists VPC endpoints — note any gaps (S3, ECR, STS, etc.) |
-| `10-spectro-readiness.sh` | Palette pre-flight — expect several WARN items |
-
-Individual scripts that fail or show WARNs do **not** fail the pipeline — that's by design.
-
-**✓ Done when:** `recon` job completes (green or yellow — yellow is fine).
+**✓ Done when:** The preflight job shows a green checkmark (✅) and you see `Preflight passed.` in the log.
 
 ---
 
-## Step 6 — Run the Export Twin Job
+## Step 7 — Run the Recon Job
 
-1. In the same pipeline, click the **▶ play button** next to `export-twin`
-2. **Expected runtime: 3–5 minutes**
-3. When done, the job log shows a summary like:
-   ```
+The `recon` job runs the 13 diagnostic scripts. It is **manual** — it won't start on its own.
+
+1. Go back to the pipeline page (click **← Back to pipelines** or navigate to `/pipelines`).
+
+2. Click the pipeline you just ran (it should say `passed` or still be running).
+
+3. In the pipeline graph, find the `recon` job. It will have a **grey play button (▶)** next to it — click that button to start it.
+
+4. Click the job name to watch live output. **Expected runtime: 10–15 minutes.**
+
+**Key things to watch for as it runs:**
+
+| Script | What to look for |
+|--------|-----------------|
+| `01-identity.sh` | Which AWS account and role we're running as |
+| `02-iam-boundaries.sh` | A lot of `DENY` results here is **normal and expected** — that's data |
+| `04-network-egress.sh` | Does it confirm LevelUp GitLab is reachable? |
+| `05-dns-resolution.sh` | **Key question:** Does `oidc.eks.us-gov-west-1.amazonaws.com` resolve? Look for `RESOLVED` or `FAILED` next to that line |
+| `08-vpc-environment.sh` | How many VPC endpoints are listed? Note the count |
+| `10-spectro-readiness.sh` | Expect several `WARN` items — that's normal, it's mapping what's missing |
+
+**About job status colours:**
+- ✅ Green = all scripts exited cleanly
+- 🟡 Yellow / "passed with warnings" = one or more scripts returned a non-zero exit — this is **expected and fine** (e.g. a denied IAM call). The artifacts are still collected.
+- ❌ Red = the job itself crashed (not just a script inside it) — send the log to Chris
+
+**✓ Done when:** The `recon` job finishes (green or yellow both count).
+
+---
+
+## Step 8 — Run the Export Twin Job
+
+The `export-twin` job captures a full JSON snapshot of the environment for building the digital twin. Also **manual** — start it the same way as the recon job.
+
+1. On the pipeline page, find the `export-twin` job and click its grey **▶** play button.
+
+2. **Expected runtime: 3–5 minutes.**
+
+3. When done, the last few lines of the job log will show a summary like:
+   ```json
    {
      "vpcs": 2,
      "subnets": 8,
@@ -205,71 +299,97 @@ Individual scripts that fail or show WARNs do **not** fail the pipeline — that
      "s3_buckets": 6
    }
    ```
+   Note those numbers — they're useful context for the team.
 
-**✓ Done when:** `export-twin` job completes green.
-
----
-
-## Step 7 — Download the Artifacts
-
-1. Go to the completed `recon` job page
-2. Click **Browse** (artifacts section, right side) or **Download**
-3. Grab:
-   - `script-outputs/` directory — individual `.txt` files per script
-   - `recon-report-<timestamp>.txt` — combined human-readable report
-4. Go to the completed `export-twin` job page
-5. Download `twin-snapshot-<timestamp>.json`
-
-**Stash the artifacts** locally and share:
-- Full report → Chris + William for review
-- Script 10 output (`10-spectro-readiness.txt`) → Tommy Scherer / Will Crum (SpectroCloud)
-- Script 05 output (`05-dns-resolution.txt`) → Marcus (OIDC DNS question)
-- Twin JSON → keep internal for now (contains real ARNs/account IDs)
+**✓ Done when:** `export-twin` job is green.
 
 ---
 
-## Step 8 — Enable Weekly Schedule (while you're in there)
+## Step 9 — Download the Artifacts
 
-1. Go to: **CI/CD → Schedules → New schedule**
+**From the recon job:**
+
+1. Click the `recon` job name to open it.
+2. On the right side of the job page, look for an **Artifacts** panel or a **Download** button. Click it.
+   - If you see a **Browse** button instead, click that and then download individual files.
+3. You'll get a zip. Inside, look for:
+   - `script-outputs/` — one `.txt` file per script (e.g. `05-dns-resolution.txt`)
+   - `recon-report-<timestamp>.txt` — everything combined in one file
+
+**From the export-twin job:**
+
+1. Click the `export-twin` job name.
+2. Same process — download the artifact.
+3. You'll get `twin-snapshot-<timestamp>.json`.
+
+**What to do with the files:**
+
+| File | Send to |
+|------|---------|
+| Full recon report (`.txt`) | Chris Wilson + William Shepard for review |
+| `05-dns-resolution.txt` | Marcus Gales — answers the OIDC DNS question |
+| `10-spectro-readiness.txt` | Tommy Scherer + Will Crum at SpectroCloud |
+| `12-imageswap-validation.txt` | Tommy Scherer + Will Crum at SpectroCloud |
+| `twin-snapshot-*.json` | Keep internal for now — contains real account IDs and ARNs |
+
+---
+
+## Step 10 — Enable the Weekly Schedule
+
+While you're logged in, set up the recurring run so we get weekly drift detection automatically.
+
+1. Go to: `https://code.levelup.cce.af.mil/siem-devgroup/siem/c1-recon/-/pipeline_schedules`
+   *(Or navigate: left sidebar → **Build** → **Pipeline schedules** → **New schedule**)*
+
 2. Fill in:
-   - Description: `Weekly c1-recon baseline`
-   - Interval: `0 6 * * 1`  *(Monday 06:00 UTC = 02:00 EST)*
-   - Target branch: `main`
-3. Add variable: `SCHEDULED_RUN` = `true`
-4. Save and activate
+   - **Description:** `Weekly c1-recon baseline`
+   - **Interval Pattern:** `0 6 * * 1`
+     *(This means: every Monday at 06:00 UTC, which is 02:00 Eastern)*
+   - **Target branch:** `main`
 
-**✓ Done when:** Schedule shows active with next run date.
+3. Under **Variables**, click **Add variable** and set:
+   - Key: `SCHEDULED_RUN`
+   - Value: `true`
+
+4. Click **Save pipeline schedule**.
+
+5. Confirm the new schedule appears in the list with a green **Active** indicator and shows a "Next run" date.
+
+**✓ Done when:** Schedule is active and shows a next run date.
 
 ---
 
-## Done — What to Note
+## Done — Notes to Capture
 
-Take a quick note on whatever you observe for the WAR and team sync:
+Jot these down for the weekly action report (WAR) and team sync:
 
-- [ ] Runner hostname / EC2 instance it's on
-- [ ] kubectl present or not?
-- [ ] AWS identity (which role / account)
-- [ ] OIDC DNS — did `oidc.eks.us-gov-west-1.amazonaws.com` resolve? (script 05)
-- [ ] VPC endpoint count (from twin export summary above)
-- [ ] EKS cluster count
-- [ ] Any unexpected blockers
+- [ ] Which EC2 the runner is on (hostname or IP)
+- [ ] Is kubectl present on the runner? (from preflight output)
+- [ ] Which AWS account and role (from script 01 output)
+- [ ] Did `oidc.eks.us-gov-west-1.amazonaws.com` resolve? (from script 05 — yes/no)
+- [ ] VPC endpoint count (from twin export summary)
+- [ ] EKS cluster count (from twin export summary)
+- [ ] Any unexpected failures or blockers
 
 ---
 
 ## Appendix: Manual gitlab-runner Install
 
-If `packages.gitlab.com` is unreachable from inside GovCloud:
+Use this if `setup-runner.sh` fails at the "Installing GitLab Runner" step because `packages.gitlab.com` is unreachable.
 
+**From a connected machine (not the EC2), stage the binary in S3:**
 ```bash
-# From a connected machine — download and stage in S3
 curl -LO "https://gitlab-ci-multi-runner-downloads.s3.amazonaws.com/latest/binaries/gitlab-runner-linux-amd64"
 aws s3 cp gitlab-runner-linux-amd64 s3://hncd-airgap-transfer/tools/gitlab-runner-linux-amd64
+```
 
-# On the GovCloud EC2
+**Then on the EC2:**
+```bash
+# Download from S3 and install
 aws s3 cp s3://hncd-airgap-transfer/tools/gitlab-runner-linux-amd64 /tmp/gitlab-runner
 sudo install -m 755 /tmp/gitlab-runner /usr/local/bin/gitlab-runner
 
-# Register manually (token pre-issued, no expiry)
+# Register (the token is pre-issued and never expires)
 sudo gitlab-runner register \
   --non-interactive \
   --url "https://code.levelup.cce.af.mil" \
@@ -280,6 +400,10 @@ sudo gitlab-runner register \
   --run-untagged "false" \
   --tls-skip-verify "true"
 
+# Start as a service
 sudo gitlab-runner install
-sudo gitlab-runner start
+sudo systemctl enable --now gitlab-runner
+sudo systemctl status gitlab-runner
 ```
+
+After this, pick up at **Step 5** (verify the runner shows green in LevelUp).
