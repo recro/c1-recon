@@ -60,6 +60,25 @@ cd ~/recon && ./00-run-all.sh
 ./11-export-twin.sh > twin-snapshot-$(date -u +%Y%m%d).json
 ```
 
+### Assuming a specific IAM role
+
+By default, scripts use whatever credentials are in the environment (instance profile or `AWS_*` env vars). To assume a specific role first, set `AWS_ROLE_ARN` before running:
+
+```bash
+# One-shot: set for a single run
+AWS_ROLE_ARN=arn:aws-us-gov:iam::123456789012:role/ReconReadOnlyRole ./00-run-all.sh
+
+# Or export for the session
+export AWS_ROLE_ARN=arn:aws-us-gov:iam::123456789012:role/ReconReadOnlyRole
+./00-run-all.sh
+./11-export-twin.sh > twin-snapshot-$(date -u +%Y%m%d).json
+
+# Role assumption is also a sourceable helper for use in your own scripts:
+source ./assume-role.sh arn:aws-us-gov:iam::123456789012:role/ReconReadOnlyRole
+```
+
+In the GitLab CI pipeline, set `AWS_ROLE_ARN` as a project CI/CD variable (Settings → CI/CD → Variables). The preflight job will confirm the assumed identity before the recon job runs.
+
 ## Output
 
 **Diagnostic report** (`00-run-all.sh`): Human-readable text with section headers, teed to `recon-report-<timestamp>.txt`.

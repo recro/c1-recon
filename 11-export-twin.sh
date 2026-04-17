@@ -22,6 +22,16 @@ if [[ -n "$_IMDS_TOKEN" ]]; then
 fi
 REGION="${REGION:-${AWS_DEFAULT_REGION:-us-gov-west-1}}"
 
+
+# ── Optional role assumption ─────────────────────────────────────────────────
+# Set AWS_ROLE_ARN to assume a specific IAM role before collecting data.
+# Assumed before get-caller-identity so ACCOUNT/CALLER_ARN reflect the role.
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -n "${AWS_ROLE_ARN:-}" ]]; then
+    # shellcheck source=assume-role.sh
+    source "${_SCRIPT_DIR}/assume-role.sh" >&2
+fi
+
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "unknown")
 CALLER_ARN=$(aws sts get-caller-identity --query Arn --output text 2>/dev/null || echo "unknown")
 PARTITION="aws"

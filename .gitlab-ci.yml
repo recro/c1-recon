@@ -26,6 +26,14 @@ stages:
 
 variables:
   AWS_DEFAULT_REGION: "us-gov-west-1"
+  # Optional: set AWS_ROLE_ARN in GitLab CI/CD → Settings → Variables to assume
+  # a specific IAM role before running diagnostic scripts. Leave unset to use
+  # the runner's default credentials (instance profile).
+  # AWS_ROLE_ARN: "arn:aws-us-gov:iam::123456789012:role/ReconReadOnlyRole"
+  #
+  # Optional: override session name and duration (defaults shown)
+  # AWS_ROLE_SESSION_NAME: "c1-recon-ci"
+  # AWS_ROLE_DURATION: "3600"
 
 # ---------------------------------------------------------------------------
 # PREFLIGHT — verify the runner has the tools we need before burning time
@@ -65,6 +73,14 @@ preflight:
     - echo ""
     # AWS credential check
     - aws sts get-caller-identity || { echo "ERROR: No valid AWS credentials"; exit 1; }
+    # If AWS_ROLE_ARN is set, assume the role now and confirm effective identity
+    - |
+      if [[ -n "${AWS_ROLE_ARN:-}" ]]; then
+        echo "AWS_ROLE_ARN: ${AWS_ROLE_ARN}"
+        source ./assume-role.sh || { echo "ERROR: role assumption failed"; exit 1; }
+      else
+        echo "No AWS_ROLE_ARN set — using runner default credentials (instance profile)"
+      fi
     - |
       if [ "$MISSING" -gt 0 ]; then
         echo "ERROR: $MISSING required tool(s) missing"

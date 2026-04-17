@@ -22,6 +22,22 @@ echo "  - AWS services via VPC endpoints only" | tee -a "$REPORT"
 echo "  - Dedicated punch-through link to LevelUp GitLab (code.levelup.cce.af.mil)" | tee -a "$REPORT"
 echo "" | tee -a "$REPORT"
 
+# ── Optional role assumption ─────────────────────────────────────────────────
+# Set AWS_ROLE_ARN (env var or GitLab CI variable) to assume a specific IAM
+# role before running the diagnostic scripts. If not set, the runner's default
+# credentials (instance profile or env vars) are used.
+if [[ -n "${AWS_ROLE_ARN:-}" ]]; then
+    echo "AWS_ROLE_ARN set — assuming role before running scripts" | tee -a "$REPORT"
+    # Note: source must NOT be in a pipeline (subshell). Capture output via temp file
+    # so exports propagate back to this shell and all child scripts inherit them.
+    _ASSUME_LOG=$(mktemp)
+    # shellcheck source=assume-role.sh
+    source "${SCRIPT_DIR}/assume-role.sh" > "$_ASSUME_LOG" 2>&1
+    cat "$_ASSUME_LOG" | tee -a "$REPORT"
+    rm -f "$_ASSUME_LOG"
+fi
+
+
 SCRIPTS=(
     "01-identity.sh"
     "02-iam-boundaries.sh"
