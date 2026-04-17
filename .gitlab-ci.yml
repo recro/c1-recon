@@ -1,0 +1,206 @@
+# c1-recon CI/CD pipeline
+#
+# Runs diagnostic scripts on the airgapped C1 GovCloud shell runner
+# to collect environment reconnaissance data. All scripts are read-only —
+# they do not create, modify, or delete any AWS resources.
+#
+# RUNNER REQUIREMENTS
+# -------------------
+# airgapped  — shell executor inside the C1 VPC (same runner as airgap-bundler).
+#              Needs: bash, aws cli v2, jq, curl, openssl.
+#              Optional: kubectl (EKS/Palette checks degrade gracefully without it),
+#                        helm (Palette Helm value extraction), dig/nslookup (DNS checks).
+#
+# ARTIFACTS
+# ---------
+# recon-report-<timestamp>.txt    — human-readable diagnostic report
+# twin-snapshot-<timestamp>.json  — structured JSON for digital twin provisioning
+# script-outputs/*.txt            — individual script output files
+#
+# All artifacts are retained for 90 days.
+
+stages:
+  - preflight
+  - recon
+  - export
+
+variables:
+  AWS_DEFAULT_REGION: "us-gov-west-1"
+
+# ---------------------------------------------------------------------------
+# PREFLIGHT — verify the runner has the tools we need before burning time
+# on the full run. Untagged so it can also run on the connected runner for
+# pipeline syntax validation.
+# ---------------------------------------------------------------------------
+preflight:
+  stage: preflight
+  tags: [airgapped]
+  script:
+    - echo "=== c1-recon preflight ==="
+    - echo "Runner hostname: $(hostname)"
+    - echo "Date: $(date -u)"
+    - echo ""
+    # Required tools
+    - |
+      MISSING=0
+      for TOOL in bash aws jq curl openssl; do
+        if command -v "$TOOL" &>/dev/null; then
+          printf "  %-15s [OK] %s\n" "$TOOL" "$(command -v $TOOL)"
+        else
+          printf "  %-15s [MISSING]\n" "$TOOL"
+          MISSING=$((MISSING + 1))
+        fi
+      done
+    # Optional tools (warn but don't fail)
+    - |
+      echo ""
+      echo "Optional tools:"
+      for TOOL in kubectl helm dig nslookup docker skopeo oras; do
+        if command -v "$TOOL" &>/dev/null; then
+          printf "  %-15s [OK]\n" "$TOOL"
+        else
+          printf "  %-15s [not available]\n" "$TOOL"
+        fi
+      done
+    - echo ""
+    # AWS credential check
+    - aws sts get-caller-identity || { echo "ERROR: No valid AWS credentials"; exit 1; }
+    - |
+      if [ "$MISSING" -gt 0 ]; then
+        echo "ERROR: $MISSING required tool(s) missing"
+        exit 1
+      fi
+    - echo "Preflight passed."
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - when: manual
+      allow_failure: true
+
+# ---------------------------------------------------------------------------
+# RECON — run all diagnostic scripts (01-10, 12) and collect the report.
+# This is the primary job. Runs on the airgapped runner.
+# Manual by default — trigger deliberately after preflight passes.
+# ---------------------------------------------------------------------------
+recon:
+  stage: recon
+  tags: [airgapped]
+  needs: [preflight]
+  script:
+    - mkdir -p script-outputs
+    - TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
+
+    # Run each script individually so one failure doesn't kill the pipeline.
+    # Capture output to both stdout (job log) and individual files (artifacts).
+    - |
+      PASS=0; FAIL=0
+      for SCRIPT in \
+        01-identity.sh \
+        02-iam-boundaries.sh \
+        03-iam-capabilities.sh \
+        04-network-egress.sh \
+        05-dns-resolution.sh \
+        06-endpoint-reachability.sh \
+        07-eks-cluster.sh \
+        08-vpc-environment.sh \
+        09-ecr-access.sh \
+        10-spectro-readiness.sh \
+        12-imageswap-validation.sh; do
+
+        BASENAME=$(echo "$SCRIPT" | sed 's/\.sh$//')
+        echo ""
+        echo "================================================================"
+        echo "  Running: ${SCRIPT}"
+        echo "  $(date -u)"
+        echo "================================================================"
+        echo ""
+
+        if timeout 300 ./"${SCRIPT}" 2>&1 | tee "script-outputs/${BASENAME}.txt"; then
+          echo "[DONE] ${SCRIPT}"
+          PASS=$((PASS + 1))
+        else
+          echo "[WARN] ${SCRIPT} exited with errors (may be expected)"
+          FAIL=$((FAIL + 1))
+        fi
+      done
+
+    # Also generate the combined report via the orchestrator
+    - ./00-run-all.sh || true
+
+    # Move the timestamped report to artifacts root
+    - mv recon-report-*.txt script-outputs/ 2>/dev/null || true
+
+    - echo ""
+    - echo "=== Recon complete: ${PASS} passed, ${FAIL} with warnings ==="
+  artifacts:
+    when: always
+    paths:
+      - script-outputs/
+    expire_in: 90 days
+    name: "recon-${CI_COMMIT_SHORT_SHA}-${CI_PIPELINE_ID}"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: manual
+    - when: manual
+      allow_failure: false
+
+# ---------------------------------------------------------------------------
+# EXPORT — generate the structured JSON snapshot for digital twin provisioning.
+# Separate job because it makes many API calls and can take several minutes.
+# Output is a single JSON file as an artifact.
+# ---------------------------------------------------------------------------
+export-twin:
+  stage: export
+  tags: [airgapped]
+  needs: [preflight]
+  script:
+    - TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
+    - echo "Exporting environment snapshot for digital twin..."
+    - ./11-export-twin.sh > "twin-snapshot-${TIMESTAMP}.json"
+    - echo "Export complete: twin-snapshot-${TIMESTAMP}.json"
+    - echo "Size: $(wc -c < twin-snapshot-${TIMESTAMP}.json) bytes"
+    - |
+      echo "Summary:"
+      jq '{
+        vpcs: (.network.vpcs | length),
+        subnets: (.network.subnets | length),
+        security_groups: (.network.security_groups | length),
+        vpc_endpoints: (.network.vpc_endpoints | length),
+        eks_clusters: (.eks | length),
+        ecr_repos: (.ecr.repositories | length),
+        s3_buckets: (.s3.buckets | length)
+      }' "twin-snapshot-${TIMESTAMP}.json"
+  artifacts:
+    when: always
+    paths:
+      - twin-snapshot-*.json
+    expire_in: 90 days
+    name: "twin-${CI_COMMIT_SHORT_SHA}-${CI_PIPELINE_ID}"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: manual
+    - when: manual
+      allow_failure: false
+
+# ---------------------------------------------------------------------------
+# SCHEDULED RECON — automatic weekly run for drift detection.
+# Enable by creating a Pipeline Schedule in GitLab UI:
+#   CI/CD → Schedules → New schedule → cron: 0 6 * * 1 (Monday 0600 UTC)
+#   Set variable: SCHEDULED_RUN = "true"
+# ---------------------------------------------------------------------------
+scheduled-recon:
+  stage: recon
+  tags: [airgapped]
+  script:
+    - mkdir -p script-outputs
+    - ./00-run-all.sh || true
+    - mv recon-report-*.txt script-outputs/ 2>/dev/null || true
+    - ./11-export-twin.sh > "script-outputs/twin-snapshot-$(date -u +%Y%m%dT%H%M%SZ).json" || true
+  artifacts:
+    when: always
+    paths:
+      - script-outputs/
+    expire_in: 90 days
+    name: "scheduled-recon-${CI_PIPELINE_ID}"
+  rules:
+    - if: '$SCHEDULED_RUN == "true"'
