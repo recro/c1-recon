@@ -11,13 +11,13 @@
 classify_aws_error() {
     local err="$1"
     _AWS_ERR_CLASS="unknown"
-    if   grep -qi "AccessDenied\|is not authorized\|UnauthorizedAccess\|forbidden"      <<< "$err"; then _AWS_ERR_CLASS="denied"
-    elif grep -qi "ExpiredToken\|TokenRefreshRequired\|ExpiredTokenException"            <<< "$err"; then _AWS_ERR_CLASS="expired_token"
-    elif grep -qi "InvalidClientTokenId\|InvalidUserToken\|UnrecognizedClientException" <<< "$err"; then _AWS_ERR_CLASS="invalid_credentials"
-    elif grep -qi "Unable to locate credentials\|NoCredentialProviders\|No credentials" <<< "$err"; then _AWS_ERR_CLASS="no_credentials"
-    elif grep -qi "Could not connect\|Connection refused\|ConnectTimeout\|ReadTimeout\|Endpoint URL cannot be reached\|timed out\|socket" <<< "$err"; then _AWS_ERR_CLASS="network"
-    elif grep -qi "NoSuchEntity\|NotFoundException\|ResourceNotFound\|does not exist"   <<< "$err"; then _AWS_ERR_CLASS="not_found"
-    elif grep -qi "RequestExpired\|Request has expired"                                 <<< "$err"; then _AWS_ERR_CLASS="clock_skew"
+    if   grep -qiE "AccessDenied|is not authorized|UnauthorizedAccess|forbidden"      <<< "$err"; then _AWS_ERR_CLASS="denied"
+    elif grep -qiE "ExpiredToken|TokenRefreshRequired|ExpiredTokenException"            <<< "$err"; then _AWS_ERR_CLASS="expired_token"
+    elif grep -qiE "InvalidClientTokenId|InvalidUserToken|UnrecognizedClientException" <<< "$err"; then _AWS_ERR_CLASS="invalid_credentials"
+    elif grep -qiE "Unable to locate credentials|NoCredentialProviders|No credentials" <<< "$err"; then _AWS_ERR_CLASS="no_credentials"
+    elif grep -qiE "Could not connect|Connection refused|ConnectTimeout|ReadTimeout|Endpoint URL cannot be reached|timed out|socket" <<< "$err"; then _AWS_ERR_CLASS="network"
+    elif grep -qiE "NoSuchEntity|NotFoundException|ResourceNotFound|does not exist"   <<< "$err"; then _AWS_ERR_CLASS="not_found"
+    elif grep -qiE "RequestExpired|Request has expired"                                 <<< "$err"; then _AWS_ERR_CLASS="clock_skew"
     fi
 }
 

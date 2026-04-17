@@ -136,32 +136,36 @@ if checkf "08-vpc-environment" "[WARN] No VPC endpoints found"; then
         "Create VPC interface endpoints for at minimum: sts, ec2, eks, ecr.api, ecr.dkr, s3 (gateway), elasticloadbalancing, logs, kms, secretsmanager, ssm. Submit C1 network change ticket."
 fi
 
-# Individual missing critical endpoints (only check if we could see the endpoint list)
+# Individual missing critical endpoints — check each service by fixed string match.
+# Uses grep -F for exact service name matching (no regex ambiguity).
 if [[ $_no_endpoints -eq 0 ]] && [[ -f "${OUTDIR}/08-vpc-environment.txt" ]]; then
-    for _svc_key in "sts" "ecr.api" "ecr.dkr" ".eks"; do
-        case "$_svc_key" in
-            sts)       _id="P1-VPC-001"; _sort="11"; _name="STS"
-                       _impact="All credential-based API calls fail. No AWS operations possible from any workload."
-                       _action="Create VPC interface endpoint: com.amazonaws.us-gov-west-1.sts (private DNS enabled)." ;;
-            ecr.api)   _id="P1-VPC-002"; _sort="12"; _name="ECR API"
-                       _impact="Cannot authenticate to ECR or list/pull container images. SpectroCloud cannot pull Palette images."
-                       _action="Create VPC interface endpoint: com.amazonaws.us-gov-west-1.ecr.api (private DNS enabled)." ;;
-            ecr.dkr)   _id="P1-VPC-003"; _sort="13"; _name="ECR DKR (Docker registry)"
-                       _impact="Container image pulls fail even if ECR API endpoint exists. Separate endpoint required for actual image data."
-                       _action="Create VPC interface endpoint: com.amazonaws.us-gov-west-1.ecr.dkr (private DNS enabled)." ;;
-            .eks)      _id="P1-VPC-004"; _sort="14"; _name="EKS"
-                       _impact="eks:* API calls fail. Cannot describe clusters, update kubeconfigs, or manage node groups."
-                       _action="Create VPC interface endpoint: com.amazonaws.us-gov-west-1.eks (private DNS enabled)." ;;
-        esac
-        if grep -q "${_svc_key}.*\[MISSING\]" "${OUTDIR}/08-vpc-environment.txt" 2>/dev/null; then
-            add_finding "$_sort" "$_id" "P1 — HIGH" \
-                "VPC endpoint missing: ${_name}" \
-                "$_impact" \
+    _ep08="${OUTDIR}/08-vpc-environment.txt"
+    _p1_endpoint() {
+        local svc="$1" sort="$2" id="$3" name="$4" impact="$5" action="$6"
+        if grep -qF "${svc}" "$_ep08" 2>/dev/null &&            grep -F "${svc}" "$_ep08" 2>/dev/null | grep -qF "[MISSING]"; then
+            add_finding "$sort" "$id" "P1 — HIGH" \
+                "VPC endpoint missing: ${name}" \
+                "$impact" \
                 "Low (30 min per endpoint)" \
                 "C1-ADMIN" \
-                "$_action Submit C1 network change ticket."
+                "$action Submit C1 network change ticket."
         fi
-    done
+    }
+    _p1_endpoint ".sts"     "11" "P1-VPC-001" "STS" \
+        "All credential-based API calls fail. No AWS operations possible from any workload." \
+        "Create VPC interface endpoint: com.amazonaws.us-gov-west-1.sts (private DNS enabled)."
+    _p1_endpoint ".ecr.api" "12" "P1-VPC-002" "ECR API" \
+        "Cannot authenticate to ECR or list/pull container images. SpectroCloud cannot pull Palette images." \
+        "Create VPC interface endpoint: com.amazonaws.us-gov-west-1.ecr.api (private DNS enabled)."
+    _p1_endpoint ".ecr.dkr" "13" "P1-VPC-003" "ECR DKR (Docker registry)" \
+        "Container image pulls fail even if ECR API endpoint exists. Separate endpoint required for actual image data." \
+        "Create VPC interface endpoint: com.amazonaws.us-gov-west-1.ecr.dkr (private DNS enabled)."
+    _p1_endpoint ".eks "    "14" "P1-VPC-004" "EKS" \
+        "eks:* API calls fail. Cannot describe clusters, update kubeconfigs, or manage node groups." \
+        "Create VPC interface endpoint: com.amazonaws.us-gov-west-1.eks (private DNS enabled)."
+    _p1_endpoint ".ec2 "    "15" "P1-VPC-005" "EC2" \
+        "ec2:Describe* calls fail. Network enumeration (VPCs, subnets, endpoints, SGs) blocked. Required by EKS node bootstrap and scripts 04, 08." \
+        "Create VPC interface endpoint: com.amazonaws.us-gov-west-1.ec2 (private DNS enabled)."
 fi
 
 # OIDC DNS

@@ -70,7 +70,7 @@ for script in "${SCRIPTS[@]}"; do
     header "Running: ${script}" | tee -a "$REPORT"
 
     BASENAME=$(echo "$script" | sed 's/\.sh$//')
-    if "$script_path" 2>&1 | tee -a "$REPORT" "${OUTDIR}/${BASENAME}.txt"; then
+    if "$script_path" 2>&1 | tee "${OUTDIR}/${BASENAME}.txt" | tee -a "$REPORT"; then
         echo "" | tee -a "$REPORT"
         echo "[DONE] ${script} completed successfully" | tee -a "$REPORT"
         PASS=$((PASS+1))

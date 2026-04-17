@@ -76,13 +76,13 @@ if ! echo "$_ASSUME_OUT" | jq -e '.Credentials' > /dev/null 2>&1; then
         esac
     else
         # lib.sh not loaded — inline classification
-        if   grep -qi "AccessDenied\|is not authorized" <<< "$_ASSUME_OUT"; then
+        if   grep -qiE "AccessDenied|is not authorized" <<< "$_ASSUME_OUT"; then
             echo "[DIAGNOSIS] sts:AssumeRole denied. Check trust policy on '${_ROLE_ARN}'." >&2
-        elif grep -qi "Could not connect\|ConnectTimeout\|Endpoint URL" <<< "$_ASSUME_OUT"; then
+        elif grep -qiE "Could not connect|ConnectTimeout|Endpoint URL" <<< "$_ASSUME_OUT"; then
             echo "[DIAGNOSIS] Network error — STS VPC endpoint may be missing in this VPC." >&2
-        elif grep -qi "Unable to locate credentials\|NoCredentialProviders" <<< "$_ASSUME_OUT"; then
+        elif grep -qiE "Unable to locate credentials|NoCredentialProviders" <<< "$_ASSUME_OUT"; then
             echo "[DIAGNOSIS] No credentials for the caller — fix caller creds first." >&2
-        elif grep -qi "ExpiredToken" <<< "$_ASSUME_OUT"; then
+        elif grep -qiE "ExpiredToken" <<< "$_ASSUME_OUT"; then
             echo "[DIAGNOSIS] Caller's token expired — check IMDS / instance profile refresh." >&2
         fi
     fi

@@ -29,20 +29,20 @@ probe() {
 
     # Combine stdout+stderr for classification (some AWS errors go to stdout)
     local _combined="${_probe_out} ${_probe_err}"
-    if   grep -qi "AccessDenied\|is not authorized\|UnauthorizedAccess\|forbidden"     <<< "$_combined"; then
+    if   grep -qiE "AccessDenied|is not authorized|UnauthorizedAccess|forbidden"     <<< "$_combined"; then
         echo "[DENIED]"
-    elif grep -qi "NoSuchEntity\|NotFoundException\|ResourceNotFound\|does not exist"  <<< "$_combined"; then
+    elif grep -qiE "NoSuchEntity|NotFoundException|ResourceNotFound|does not exist"  <<< "$_combined"; then
         echo "[ALLOWED] (resource not found — call accepted)"
-    elif grep -qi "InvalidParameterValue\|ValidationError\|InvalidAction"               <<< "$_combined"; then
+    elif grep -qiE "InvalidParameterValue|ValidationError|InvalidAction"               <<< "$_combined"; then
         echo "[ALLOWED] (param/validation error — call reached service)"
-    elif grep -qi "ExpiredToken\|TokenRefreshRequired"                                   <<< "$_combined"; then
+    elif grep -qiE "ExpiredToken|TokenRefreshRequired"                                   <<< "$_combined"; then
         echo "[CREDENTIAL ERROR] token expired — check IMDS/instance profile"
-    elif grep -qi "Unable to locate credentials\|NoCredentialProviders"                  <<< "$_combined"; then
+    elif grep -qiE "Unable to locate credentials|NoCredentialProviders"                  <<< "$_combined"; then
         echo "[CREDENTIAL ERROR] no credentials — verify instance profile is attached"
-    elif grep -qi "Could not connect\|ConnectTimeout\|ReadTimeout\|Endpoint URL cannot be reached\|socket" <<< "$_combined"; then
+    elif grep -qiE "Could not connect|ConnectTimeout|ReadTimeout|Endpoint URL cannot be reached|socket" <<< "$_combined"; then
         echo "[NETWORK ERROR] endpoint unreachable — VPC endpoint may be missing"
-        printf "  %-55s   ↳ %s\n" "" "$(echo "$_probe_err" | grep -i 'error\|connect\|endpoint' | head -1 | cut -c1-100)"
-    elif grep -qi "RequestExpired\|Request has expired"                                  <<< "$_combined"; then
+        printf "  %-55s   ↳ %s\n" "" "$(echo "$_probe_err" | grep -i 'error|connect|endpoint' | head -1 | cut -c1-100)"
+    elif grep -qiE "RequestExpired|Request has expired"                                  <<< "$_combined"; then
         echo "[CLOCK SKEW] system clock out of sync with AWS (>5 min)"
     else
         # Unknown error — show first useful line
