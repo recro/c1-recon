@@ -49,7 +49,7 @@ echo "Proxy config files:"
 for f in /etc/profile.d/proxy.sh /etc/environment /etc/sysconfig/proxy; do
     if [[ -f "$f" ]]; then
         echo "  [FOUND] $f"
-        grep -i proxy "$f" 2>/dev/null | head -5 | sed 's/^/    /'
+        grep -i proxy "$f" 2>/dev/null | head -5 | sed 's/^/    /' || true
     fi
 done
 
@@ -165,7 +165,7 @@ printf "  %-40s " "DNS resolution"
 if command -v dig &>/dev/null; then
     GL_DNS=$(dig +short +timeout=5 code.levelup.cce.af.mil 2>/dev/null | head -1)
 elif command -v nslookup &>/dev/null; then
-    GL_DNS=$(nslookup code.levelup.cce.af.mil 2>/dev/null | grep -A1 "Name:" | grep "Address" | awk '{print $2}' | head -1)
+    GL_DNS=$(nslookup code.levelup.cce.af.mil 2>/dev/null | grep -A1 "Name:" | grep "Address" | awk '{print $2}' | head -1) || true
 else
     GL_DNS=""
 fi

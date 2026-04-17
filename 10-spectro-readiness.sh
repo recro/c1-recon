@@ -468,8 +468,8 @@ for REGISTRY_HOST in "$ECR_REGISTRY" "registry.cdso.army.mil"; do
     CERT_OUTPUT=$(echo | timeout 10 openssl s_client -connect "${REGISTRY_HOST}:443" \
         -servername "$REGISTRY_HOST" -showcerts 2>/dev/null)
     if echo "$CERT_OUTPUT" | grep -q "CONNECTED"; then
-        VERIFY=$(echo "$CERT_OUTPUT" | grep "Verify return code" | head -1)
-        CHAIN_DEPTH=$(echo "$CERT_OUTPUT" | grep -c "BEGIN CERTIFICATE")
+        VERIFY=$(echo "$CERT_OUTPUT" | grep "Verify return code" | head -1) || true
+        CHAIN_DEPTH=$(echo "$CERT_OUTPUT" | grep -c "BEGIN CERTIFICATE") || true
         ISSUER=$(echo "$CERT_OUTPUT" | openssl x509 -noout -issuer 2>/dev/null | sed 's/issuer=//')
         EXPIRY=$(echo "$CERT_OUTPUT" | openssl x509 -noout -enddate 2>/dev/null | sed 's/notAfter=//')
         echo "[OK] chain_depth=${CHAIN_DEPTH} expires=${EXPIRY}"
@@ -629,7 +629,7 @@ printf "  %-55s " "DNS: code.levelup.cce.af.mil"
 if command -v dig &>/dev/null; then
     GL_IP=$(dig +short +timeout=5 code.levelup.cce.af.mil 2>/dev/null | head -1)
 elif command -v nslookup &>/dev/null; then
-    GL_IP=$(nslookup code.levelup.cce.af.mil 2>/dev/null | grep -A1 "Name:" | grep "Address" | awk '{print $2}' | head -1)
+    GL_IP=$(nslookup code.levelup.cce.af.mil 2>/dev/null | grep -A1 "Name:" | grep "Address" | awk '{print $2}' | head -1) || true
 else
     GL_IP=""
 fi
@@ -661,7 +661,7 @@ for RC in "${RUNNER_CONFIGS[@]}"; do
     if [[ -f "$RC" ]]; then
         ok "Runner config found: ${RC}"
         # Show runner URL and executor (not tokens)
-        grep -E '^\s*(url|executor|name)\s*=' "$RC" 2>/dev/null | sed 's/^/       /'
+        grep -E '^\s*(url|executor|name)\s*=' "$RC" 2>/dev/null | sed 's/^/       /' || true
         FOUND_RUNNER=true
     fi
 done

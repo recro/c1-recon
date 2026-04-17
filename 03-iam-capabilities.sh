@@ -41,14 +41,14 @@ probe() {
         echo "[CREDENTIAL ERROR] no credentials — verify instance profile is attached"
     elif grep -qiE "Could not connect|ConnectTimeout|ReadTimeout|Endpoint URL cannot be reached|socket" <<< "$_combined"; then
         echo "[NETWORK ERROR] endpoint unreachable — VPC endpoint may be missing"
-        printf "  %-55s   ↳ %s\n" "" "$(echo "$_probe_err" | grep -i 'error|connect|endpoint' | head -1 | cut -c1-100)"
+        printf "  %-55s   ↳ %s\n" "" "$(echo "$_probe_err" | grep -iE 'error|connect|endpoint' | head -1 | cut -c1-100)" || true
     elif grep -qiE "RequestExpired|Request has expired"                                  <<< "$_combined"; then
         echo "[CLOCK SKEW] system clock out of sync with AWS (>5 min)"
     else
         # Unknown error — show first useful line
         local _msg
-        _msg=$(echo "$_probe_err" | grep -v '^$' | head -1 | cut -c1-100)
-        [[ -z "$_msg" ]] && _msg=$(echo "$_probe_out" | grep -v '^$' | head -1 | cut -c1-100)
+        _msg=$(echo "$_probe_err" | grep -v '^$' | head -1 | cut -c1-100) || true
+        [[ -z "$_msg" ]] && { _msg=$(echo "$_probe_out" | grep -v '^$' | head -1 | cut -c1-100) || true; }
         echo "[ERROR] ${_msg:-unknown error}"
     fi
     return 0  # Never fail the script — denial/error is the diagnostic data

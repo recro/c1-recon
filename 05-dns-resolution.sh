@@ -27,7 +27,7 @@ echo "Region: ${REGION}"
 # Determine DNS resolver
 section "DNS Configuration"
 echo "/etc/resolv.conf:"
-cat /etc/resolv.conf 2>/dev/null | grep -v '^#' | grep -v '^$' | sed 's/^/  /'
+cat /etc/resolv.conf 2>/dev/null | grep -v '^#' | grep -v '^$' | sed 's/^/  /' || true
 
 echo ""
 echo "systemd-resolved status:"
@@ -56,7 +56,7 @@ dns_check() {
     if [[ "$RESOLVER" == "dig" ]]; then
         RESULT=$(dig +short +timeout=5 "$hostname" 2>/dev/null)
     else
-        RESULT=$(nslookup "$hostname" 2>/dev/null | grep -A1 "Name:" | grep "Address" | awk '{print $2}')
+        RESULT=$(nslookup "$hostname" 2>/dev/null | grep -A1 "Name:" | grep "Address" | awk '{print $2}') || true
     fi
 
     if [[ -n "$RESULT" && "$RESULT" != *"NXDOMAIN"* && "$RESULT" != *"SERVFAIL"* ]]; then

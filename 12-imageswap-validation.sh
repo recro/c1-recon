@@ -371,7 +371,7 @@ if $HAS_KUBECTL; then
         # Extract all container images from pods in this namespace
         IMAGES=$(echo "$PODS_JSON" | jq -r '.items[].spec.containers[].image' 2>/dev/null || true)
         INIT_IMAGES=$(echo "$PODS_JSON" | jq -r '.items[].spec.initContainers[]?.image' 2>/dev/null || true)
-        ALL_IMAGES=$(echo -e "${IMAGES}\n${INIT_IMAGES}" | sort -u | grep -v '^$')
+        ALL_IMAGES=$(echo -e "${IMAGES}\n${INIT_IMAGES}" | sort -u | grep -v '^$') || true
 
         for IMG in $ALL_IMAGES; do
             printf "    %-70s " "$(echo "$IMG" | rev | cut -c1-70 | rev)"
