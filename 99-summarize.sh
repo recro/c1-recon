@@ -247,6 +247,44 @@ if checkf "02-iam-boundaries" "[Access denied — iam:SimulatePrincipalPolicy"; 
         "Add iam:SimulatePrincipalPolicy to the runner role's policy (not the boundary — boundaries only restrict, they don't grant). This is a read-only diagnostic action with no security impact."
 fi
 
+# SpectroCloud permission gaps (from 13-spectro-permissions.sh)
+if [[ -f "${OUTDIR}/13-spectro-permissions.txt" ]]; then
+    # Check for overall gap
+    _perm_denied=$(grep -c '\[DENIED\]' "${OUTDIR}/13-spectro-permissions.txt" 2>/dev/null) || true
+    _perm_denied="${_perm_denied:-0}"
+
+    if (( _perm_denied > 0 )); then
+        # Extract per-policy gap counts
+        _gap_policies=""
+        for _pol in "PaletteControllerPolicy" "PaletteControlPlanePolicy" "PaletteNodesPolicy" "PaletteDeploymentPolicy" "PaletteControllersEKSPolicy"; do
+            _pol_denied=$(grep -A 1000 "Policy: ${_pol}" "${OUTDIR}/13-spectro-permissions.txt" 2>/dev/null | \
+                grep -B 1000 -m1 "^  ─" | grep -c '\[DENIED\]' 2>/dev/null) || true
+            if [[ -n "$_pol_denied" ]] && (( _pol_denied > 0 )); then
+                _gap_policies="${_gap_policies:+${_gap_policies}, }${_pol} (${_pol_denied})"
+            fi
+        done
+
+        add_finding "25" "P1-IAM-010" "P1 — HIGH" \
+            "SpectroCloud IAM permission gaps: ${_perm_denied} actions denied" \
+            "Role is missing ${_perm_denied} actions required by upstream SpectroCloud Palette/VerteX IAM policy documentation. Gaps in: ${_gap_policies:-unknown policies}. Palette controllers will fail to provision or manage clusters until these are granted." \
+            "Medium (IAM policy update, may require C1 change process)" \
+            "HNCD-TEAM" \
+            "Review 13-spectro-permissions output for the full list of denied actions. Compare against docs.spectrocloud.com/clusters/public-cloud/aws/required-iam-policies/ and add missing actions to the role's attached policy. If a permissions boundary blocks the action, it must also be updated (requires C1-ADMIN)."
+    fi
+
+    # Untested actions (simulation denied)
+    _perm_untested=$(grep -c '\[UNTESTED' "${OUTDIR}/13-spectro-permissions.txt" 2>/dev/null) || true
+    _perm_untested="${_perm_untested:-0}"
+    if (( _perm_untested > 0 )); then
+        add_finding "33" "P2-IAM-002" "P2 — MEDIUM" \
+            "SpectroCloud permission comparison incomplete — ${_perm_untested} actions untested" \
+            "iam:SimulatePrincipalPolicy is denied, so the permission gap analysis could not test ${_perm_untested} actions. The actual gap may be larger than reported." \
+            "Low (grant iam:SimulatePrincipalPolicy)" \
+            "HNCD-TEAM" \
+            "Grant iam:SimulatePrincipalPolicy to enable full permission comparison. Then re-run 13-spectro-permissions.sh."
+    fi
+fi
+
 # ────────── P3: Advisory / low impact ────────────────────────────────────────
 
 # No EKS clusters visible

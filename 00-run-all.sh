@@ -52,6 +52,7 @@ SCRIPTS=(
     "09-ecr-access.sh"
     "10-spectro-readiness.sh"
     "12-imageswap-validation.sh"
+    "13-spectro-permissions.sh"
     # 11-export-twin.sh runs separately — outputs JSON, not part of text report
 )
 
