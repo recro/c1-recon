@@ -2,6 +2,14 @@
 
 Diagnostic scripts designed to run from a deployed EC2 instance inside the HNCD CloudOne (GovCloud) environment. Each script is self-contained and outputs structured results to help map the environment's IAM, networking, DNS, and service boundaries.
 
+## Running Today?
+
+→ **[sessions/2026-04-17-first-recon.md](sessions/2026-04-17-first-recon.md)** — Step-by-step driver's guide for the April 17 session (runner registration + first recon run + twin export). Start here.
+
+For the full deployment plan and ongoing ops, see [DEPLOYMENT_PLAN.md](DEPLOYMENT_PLAN.md).
+
+---
+
 ## Environment Assumptions
 
 - **Airgapped** — no internet egress whatsoever
