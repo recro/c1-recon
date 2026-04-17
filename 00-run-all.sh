@@ -5,6 +5,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 REPORT="recon-report-${TIMESTAMP}.txt"
+OUTDIR="script-outputs"
+mkdir -p "$OUTDIR"
 
 header() {
     echo ""
@@ -67,7 +69,8 @@ for script in "${SCRIPTS[@]}"; do
 
     header "Running: ${script}" | tee -a "$REPORT"
 
-    if "$script_path" 2>&1 | tee -a "$REPORT"; then
+    BASENAME=$(echo "$script" | sed 's/\.sh$//')
+    if "$script_path" 2>&1 | tee -a "$REPORT" "${OUTDIR}/${BASENAME}.txt"; then
         echo "" | tee -a "$REPORT"
         echo "[DONE] ${script} completed successfully" | tee -a "$REPORT"
         PASS=$((PASS+1))
@@ -85,5 +88,10 @@ echo "  Skipped: ${SKIP}" | tee -a "$REPORT"
 echo "" | tee -a "$REPORT"
 echo "Full report: $(pwd)/${REPORT}" | tee -a "$REPORT"
 echo "" | tee -a "$REPORT"
+# ── Findings summary ────────────────────────────────────────────────────────
+if [[ -x "${SCRIPT_DIR}/99-summarize.sh" ]]; then
+    "${SCRIPT_DIR}/99-summarize.sh" "$OUTDIR" 2>&1 | tee -a "$REPORT"
+fi
+
 echo "To export structured JSON for digital twin provisioning:" | tee -a "$REPORT"
 echo "  ./11-export-twin.sh > twin-snapshot-${TIMESTAMP}.json" | tee -a "$REPORT"
